@@ -143,6 +143,8 @@ The warmer is most useful when a server has several collection or recommendation
 
 ### Docker Compose
 
+Clone this repository and run `docker compose up -d` (add `--build` to build the image yourself), or put this in a `compose.yaml` of your own:
+
 ```yaml
 services:
   hub-warmer:
@@ -169,7 +171,7 @@ Open `http://<host>:8080`. Setup has two steps, both on the page:
 
 The warmer then learns requests from the Plex log and starts its first pass within a few minutes. No other configuration is needed; everything else is on the Settings page.
 
-The [`examples/`](examples/) folder has equivalents for `docker run`, Kubernetes and Unraid.
+The file is [`compose.yaml`](compose.yaml). The [`examples/`](examples/) folder has equivalents for `docker run`, Kubernetes and Unraid.
 
 ## Web interface
 

@@ -1,9 +1,12 @@
-# Hub Warmer - Docker Compose example.
-# After `docker compose up -d`, open http://<host>:8080: enter the Plex address, then "Sign in with Plex" as the server owner.
+# Hub Warmer - Docker Compose.
+#   docker compose up -d            pulls the published image
+#   docker compose up -d --build    builds it from this folder instead
+# Then open http://<host>:8080: enter the Plex address, then "Sign in with Plex" as the server owner.
 # Plex needs debug logging ON: Settings > General > Enable Plex Media Server debug logging.
 services:
   hub-warmer:
     image: ghcr.io/quinneydavid/hub-warmer:latest
+    build: .
     container_name: hub-warmer
     restart: unless-stopped
     ports:
