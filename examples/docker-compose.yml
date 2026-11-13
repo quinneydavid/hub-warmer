@@ -1,0 +1,18 @@
+# Hub Warmer - Docker Compose example.
+# After `docker compose up -d`, open http://<host>:8080: enter the Plex address, then "Sign in with Plex" as the server owner.
+# Plex needs debug logging ON: Settings > General > Enable Plex Media Server debug logging.
+services:
+  hub-warmer:
+    image: ghcr.io/quinneydavid/hub-warmer:latest
+    container_name: hub-warmer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: Europe/London                 # time zone of the Plex server (used for log timestamps)
+    volumes:
+      - hub-warmer:/data                # learned requests, history, settings, owner token
+      # A folder instead (./hub-warmer:/data) must belong to user 1000:  mkdir hub-warmer && sudo chown 1000:1000 hub-warmer
+
+volumes:
+  hub-warmer:

@@ -1,0 +1,74 @@
+# Hub Warmer: Deployment, Service, PersistentVolumeClaim and an optional token Secret.
+# Expose the Service through an ingress and open it: the page asks for the Plex address, then the owner signs in.
+# Settings live on the page and in the volume. The env entries below are optional defaults for setups kept as code.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hub-warmer
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 64Mi
+---
+# Optional: provide the owner token instead of signing in on the page.
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: hub-warmer
+# stringData:
+#   PLEX_TOKEN: xxxxxxxxxxxxxxxxxxxx
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hub-warmer
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: hub-warmer}
+  template:
+    metadata:
+      labels: {app: hub-warmer}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: app
+          image: ghcr.io/quinneydavid/hub-warmer:latest
+          env:
+            - {name: TZ, value: "Europe/London"}
+            # - {name: PLEX_URL, value: "http://pms.example.internal:32400"}
+            # - {name: PUBLIC_URL, value: "https://warmer.example.com"}
+          # envFrom: [{secretRef: {name: hub-warmer}}]
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 30}
+          livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 30}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 10m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: hub-warmer}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hub-warmer
+  labels: {app: hub-warmer}
+spec:
+  selector: {app: hub-warmer}
+  ports:
+    - {name: http, port: 8080, targetPort: http}

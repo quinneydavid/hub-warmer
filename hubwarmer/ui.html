@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hub Warmer</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#1d1d1b;--mute:#6b6a65;--line:#e6e3dc;--acc:#e5a00d;--ok:#2f8f5b;--warn:#c47f00;--bad:#c0392b;--bar:#e5a00d;--bar2:#f0d48a;--heat:229,160,13;
+--s0:#1c5cab;--s1:#3987e5;--s2:#86b6ef;--s3:#c3c2b7;--s4:#e88f8e;--s5:#e34948;--s6:#a32626;
+--c0:#c3c2b7;--c1:#2a78d6;--c2:#eb6834;--c3:#1baf7a;--c4:#eda100;--c5:#e87ba4;--c6:#008300}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1e1e1c;--ink:#ecebe6;--mute:#9b9a94;--line:#2e2d2a;--bar2:#5a4a20;
+--s0:#86b6ef;--s1:#3987e5;--s2:#1c5cab;--s3:#52514e;--s4:#a83a3a;--s5:#e66767;--s6:#f4b0b0;
+--c0:#52514e;--c1:#3987e5;--c2:#d95926;--c3:#199e70;--c4:#c98500;--c5:#d55181;--c6:#008300}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--card);flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:650}header .sp{flex:1}
+.logo{width:26px;height:26px;border-radius:6px;background:var(--acc);display:grid;place-items:center}.logo i{display:block;width:14px;height:2px;border-radius:1px;background:#1d1d1b;margin:1.5px 0}.logo i:nth-child(2){width:10px}.logo i:nth-child(3){width:12px}
+nav{display:flex;gap:4px}nav a{padding:6px 12px;border-radius:8px;color:var(--mute);text-decoration:none;font-size:14px}nav a.on{background:var(--bg);color:var(--ink);font-weight:600}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+.pill{font-size:12px;padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:var(--mute);white-space:nowrap}
+.pill.ok{color:var(--ok);border-color:currentColor}.pill.warn{color:var(--warn);border-color:currentColor}.pill.bad{color:var(--bad);border-color:currentColor}
+.me{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:13px}.me img{width:26px;height:26px;border-radius:50%}
+button,.btn,select,input{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:6px 11px;border-radius:8px}
+button,.btn{cursor:pointer;text-decoration:none;display:inline-block}button.primary,.btn.primary{background:var(--acc);border-color:var(--acc);color:#1d1d1b;font-weight:600}
+button:disabled{opacity:.5;cursor:default}button.link{border:0;background:none;color:var(--mute);padding:2px 4px;font-size:12.5px;text-decoration:underline}
+input{width:110px}
+.banner{padding:12px 14px;border-radius:10px;margin-bottom:16px;border:1px solid var(--warn);color:var(--warn)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin-bottom:18px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tile .k{font-size:12px;color:var(--mute);font-weight:600;letter-spacing:.02em}.tile .v{font-size:26px;font-weight:650;margin:3px 0;font-variant-numeric:tabular-nums}.tile .s{font-size:12.5px;color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px;overflow-x:auto}
+.card h2{font-size:14.5px;font-weight:650;margin:0 0 3px}.card h3{font-size:14px;margin:14px 0 6px}.card .sub{font-size:12.5px;color:var(--mute);margin:0 0 12px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
+svg text{fill:var(--mute);font-size:10px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{font-weight:600;color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.acct{border:1px solid var(--line);border-radius:12px;margin-bottom:12px;background:var(--card)}
+.acct>summary{cursor:pointer;padding:12px 14px;display:flex;gap:12px;align-items:center;list-style:none;flex-wrap:wrap}.acct>summary::-webkit-details-marker{display:none}
+.acct .nm{font-weight:650;min-width:140px}.meta{color:var(--mute);font-size:12.5px}.acct .body{padding:0 14px 12px}
+.dev{border-top:1px solid var(--line);padding:10px 0}.dev .hd{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.dev .t{font-weight:600}
+.off{opacity:.55}
+.lg{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin:6px 0 2px}.lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.mini{display:flex;height:10px;width:170px;border-radius:3px;overflow:hidden;gap:1px}.mini i{display:block;height:100%}
+.hb{display:inline-block;height:8px;border-radius:0 3px 3px 0;background:var(--s1);vertical-align:middle;margin-right:6px}
+.why{font-size:12px;color:var(--mute)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--ok)}.dot.cold{background:var(--warn)}.dot.none{background:var(--line)}
+.sw{position:relative;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mute);cursor:pointer;user-select:none}
+.sw input{display:none}.sw i{width:32px;height:18px;border-radius:9px;background:var(--line);position:relative;transition:.15s}
+.sw i:after{content:"";position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:2px;transition:.15s}
+.sw input:checked+i{background:var(--ok)}.sw input:checked+i:after{left:16px}
+.center{min-height:70vh;display:grid;place-items:center;text-align:center}.center .box{max-width:420px}
+.muted{color:var(--mute)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.set{display:grid;grid-template-columns:minmax(200px,1.2fr) 230px 1.6fr;gap:8px 14px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.set .h{font-size:12.5px;color:var(--mute)}.chg{color:var(--acc);font-size:11px;margin-left:4px}
+.heat{display:grid;grid-template-columns:28px repeat(24,1fr);gap:1px;font-size:9px;color:var(--mute);max-width:520px}.heat div{height:9px;border-radius:2px}
+@media (max-width:640px){.set{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo" aria-hidden="true"><span><i></i><i></i><i></i></span></div><h1>Hub Warmer</h1><span id="state" class="pill">…</span>
+  <nav id="nav"></nav><span class="sp"></span><div class="me" id="me"></div>
+</header>
+<main id="app"><p class="muted">Loading…</p></main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dur = sec => sec == null ? "–" : sec < 60 ? `${sec.toFixed(sec < 10 ? 1 : 0)} s` : sec < 3600 ? `${Math.round(sec/60)} min` : `${(sec/3600).toFixed(1)} h`;
+const ms = v => v == null ? "–" : v < 1000 ? `${v} ms` : `${(v/1000).toFixed(1)} s`;
+const ago = ts => { if (!ts) return "never"; const d = Date.now()/1000 - ts; return d < 90 ? "just now" : d < 5400 ? `${Math.round(d/60)} min ago` : d < 172800 ? `${Math.round(d/3600)} h ago` : `${Math.round(d/86400)} days ago`; };
+const until = ts => { if (!ts) return "–"; const d = ts - Date.now()/1000; return d <= 5 ? "now" : d < 90 ? `in ${Math.round(d)} s` : d < 5400 ? `in ${Math.round(d/60)} min` : `in ${(d/3600).toFixed(1)} h`; };
+const dayname = d => new Date(d + "T12:00").toLocaleDateString(undefined, {weekday: "short"});
+const errors = {expired:"The sign-in link has expired. Please try again.", cancelled:"Sign-in was cancelled.", denied:"This Plex account does not have access to this server.", changed:"The server address was changed while you were signing in. Check it and sign in again.", busy:"Too many sign-ins are under way. Try again in a few minutes.", check:"Access could not be verified with Plex. Please try again."};
+let D = null, tab = (location.hash || "#overview").slice(1), dirty = false;
+
+async function post(path, body){ const r = await fetch(path, {method:"POST", headers:{"X-Hub-Warmer":"1","Content-Type":"application/json"}, body: JSON.stringify(body || {})}); return [r.ok, await r.json().catch(() => ({}))]; }
+
+function signin(setup, needAddress, plexUrl){
+  const e = new URLSearchParams(location.search).get("e");
+  $("#state").textContent = setup ? "Setup required" : "Signed out"; $("#nav").innerHTML = ""; $("#me").innerHTML = "";
+  if (needAddress) {
+    $("#app").innerHTML = `<div class="center"><div class="box"><h2>Set up Hub Warmer</h2>
+      <p class="muted">Step 1 of 2. The address of the Plex Media Server, as reachable from this container.</p>
+      <p><input id="addr" type="url" placeholder="http://192.168.1.10:32400" value="${esc(plexUrl || "")}" style="width:100%" onkeydown="if(event.key==='Enter')setAddress()"></p>
+      <p id="addrmsg" class="muted"></p><button class="primary" onclick="setAddress()">Test and save</button></div></div>`;
+    return;
+  }
+  $("#app").innerHTML = `<div class="center"><div class="box"><h2>${setup ? "Set up Hub Warmer" : "Sign in"}</h2>
+    <p class="muted">${setup ? "Step 2 of 2. Sign in with the Plex account that owns this server to complete setup." : "Sign in with a Plex account that has access to this server."}</p>
+    ${setup && plexUrl ? `<p class="muted">Server address: <b>${esc(plexUrl)}</b> · <a href="#" id="chaddr">change</a><br>After you sign in, Hub Warmer sends your Plex token to this address. Continue only if it is your server.</p>` : ""}
+    ${e ? `<p class="banner">${esc(errors[e] || "Sign-in failed.")}</p>` : ""}<a class="btn primary" href="/login">Sign in with Plex</a></div></div>`;
+  const ch = $("#chaddr"); if (ch) ch.onclick = ev => { ev.preventDefault(); signin(true, true, plexUrl); };
+}
+async function setAddress(){
+  $("#addrmsg").textContent = "Testing…";
+  const [ok, j] = await post("/api/setup", {plex_url: $("#addr").value});
+  if (!ok) { $("#addrmsg").textContent = (j.errors || [j.error || "Failed."]).join(" · "); return; }
+  $("#addrmsg").textContent = `Found Plex Media Server ${j.version || ""}.`; setTimeout(load, 1200);
+}
+
+// ---------- charts ----------
+const SPEED = ["0.25 s or less", "0.25–0.5 s", "0.5–1 s", "1–2 s", "2–5 s", "5–10 s", "over 10 s"], SPEEDC = [0,1,2,3,4,5,6].map(i => `var(--s${i})`);
+const CAUSES = ["own playback", "library change", "row changed", "new app or screen", "other", "not cache related"];
+const CAUSEN = {"own playback": "Account was playing", "library change": "Library updated", "row changed": "Collection changed", "new app or screen": "First request from client", "other": "Cache entry expired", "not cache related": "Cached, still slow"};
+const CAUSEC = [1,2,3,4,5,6].map(i => `var(--c${i})`), cname = c => CAUSEN[c] || c;
+const REASON = {"watching now (warms when playback ends)": "Playing – resumes when playback ends", "watching now (other devices kept warm)": "Playing – other devices kept warm", "playback just ended": "Playback ended", "active recently": "Active recently", "usual hours": "Usual hours", "out of hours (idle refresh)": "Idle – refresh due", "out of hours (waiting)": "Idle", "out of hours (home only)": "Idle – Home only", "always": "Every pass", "off": "Disabled", "all devices off": "All devices disabled"};
+const reason = r => REASON[r] || r;
+const legend = (names, colors) => `<div class="lg">${names.map((n, i) => `<span><i style="background:${colors[i]}"></i>${esc(n)}</span>`).join("")}</div>`;
+const niceMax = v => { const p = Math.pow(10, Math.floor(Math.log10(v))); return [1, 2, 5, 10].map(m => m * p).find(m => m >= v); };
+function stack(items, o){
+  // items: [{label, title, vals:[..]}] - one stacked bar each, first value at the bottom. o: names, colors, pct, w, h, every, mark, unit
+  const W = o.w || 1000, H = o.h || 190, PL = 36, PB = 22, PT = o.mark >= 0 ? 28 : 16, n = items.length, bw = Math.min((W - PL) / Math.max(n, 1), o.maxbar || 1e9), gap = Math.min(6, bw * .18);
+  const tot = it => it.vals.reduce((a, b) => a + b, 0), mx = o.pct ? 100 : niceMax(Math.max(1, ...items.map(tot)));
+  const y = v => H - PB - (v / mx) * (H - PB - PT);
+  let g = [0, .5, 1].map(f => `<line x1="${PL}" x2="${W}" y1="${y(f*mx)}" y2="${y(f*mx)}" stroke="var(--line)"/><text x="${PL-5}" y="${y(f*mx)+3}" text-anchor="end">${Math.round(f*mx)}${o.pct ? "%" : ""}</text>`).join("");
+  items.forEach((it, i) => {
+    const x = PL + i * bw, t = tot(it); let acc = 0, segs = "";
+    if (t) it.vals.forEach((v, k) => { if (!v) return; const val = o.pct ? 100 * v / t : v, y1 = y(acc + val), hgt = y(acc) - y1; acc += val;
+      segs += `<rect x="${x+gap/2}" y="${y1}" width="${Math.max(bw-gap,1)}" height="${Math.max(hgt-1,.6)}" rx="1.5" fill="${o.colors[k]}"/>`; });
+    const tip = t ? `${it.title}\n${it.vals.map((v, k) => v ? `${o.names[k]}: ${v}${o.pct ? ` (${Math.round(100*v/t)}%)` : ""}` : "").filter(Boolean).join("\n")}\ntotal: ${t}${it.extra ? "\n" + it.extra : ""}` : `${it.title}\nnothing`;
+    g += `<g>${segs}${t && o.count ? `<text x="${x+bw/2}" y="${y(o.pct ? 100 : t)-4}" text-anchor="middle">${t}</text>` : ""}${t ? "" : `<text x="${x+bw/2}" y="${H-PB-6}" text-anchor="middle">–</text>`}
+      <rect x="${x}" y="${PT}" width="${bw}" height="${H-PB-PT}" fill="transparent"><title>${esc(tip)}</title></rect></g>`;
+    if (i % (o.every || 1) === 0) g += `<text x="${x+bw/2}" y="${H-6}" text-anchor="middle">${esc(it.label)}</text>`;
+    if (o.mark === i) g += `<line x1="${x+1}" x2="${x+1}" y1="2" y2="${H-PB}" stroke="var(--ok)" stroke-dasharray="3 3"/><text x="${i > n/2 ? x-4 : x+5}" y="10" text-anchor="${i > n/2 ? "end" : "start"}" style="fill:var(--ok)">installed</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img">${g}</svg>`;
+}
+function dailyChart(days, opts = {}){
+  // one bar per day: how long real loads took (share per speed band), number of loads on top
+  return stack(days.map(d => ({label: dayname(d.day), title: `${d.day} · median ${ms(d.p50_ms)} · 95% within ${ms(d.p95_ms)}`, vals: d.b || []})),
+    {names: SPEED, colors: SPEEDC, pct: true, count: true, w: opts.w || 700, h: opts.h || 170, mark: opts.started ? days.findIndex(d => d.day === opts.started) : -1});
+}
+function hourlyChart(hours){
+  if (!hours.length) return `<p class="muted">No loads recorded yet.</p>`;
+  return stack(hours.map(h => ({label: h.hour.slice(11) + ":00", title: `${h.hour.replace("T", " ")}:00 · median ${ms(h.p50_ms)}`, vals: h.b || []})),
+    {names: SPEED, colors: SPEEDC, every: Math.ceil(hours.length / 12), h: 180, maxbar: 40});
+}
+function causeChart(days){
+  return stack(days.map(d => ({label: dayname(d.day), title: `${d.day} · ${d.slow} of ${d.n} loads`, vals: CAUSES.map(c => d.causes[c] || 0),
+    extra: d.slow ? "total duration: " + dur(Object.values(d.waits).reduce((a, b) => a + b, 0) / 1000) : ""})),
+    {names: CAUSES.map(cname), colors: CAUSEC, count: true, w: 700, h: 170});
+}
+const POSTN = ["Instant (already prepared)", "30–80 ms", "Prepared on request (over 80 ms)"], POSTC = ["var(--s0)", "var(--s3)", "var(--s5)"];
+function posterChart(days){
+  return stack(days.map(d => ({label: dayname(d.day), title: `${d.day} · ${d.pct == null ? "–" : d.pct + "% instant"}${d.avg_ms == null ? "" : " · average " + ms(d.avg_ms)}`, vals: [d.instant, d.between, d.slow]})),
+    {names: POSTN, colors: POSTC, count: true, w: 700, h: 170});
+}
+function postersCard(d){
+  const p = d.posters, t = p.daily[p.daily.length - 1], wk = p.daily.reduce((a, x) => ({n: a.n + x.n, instant: a.instant + x.instant}), {n: 0, instant: 0});
+  if (!p.daily.some(x => x.n || x.checked)) return "";
+  return `<div class="card"><h2>Posters</h2><p class="sub">Plex resizes each poster for the device that asks and keeps the result. The chart shows poster requests from real apps and how many Plex could answer at once. ${p.enabled ? "Poster preparation is on." : "Poster preparation is off."}</p>
+    <div class="grid2"><div>${posterChart(p.daily)}${legend(POSTN, POSTC)}</div>
+    <div><table><tr><th>Day</th><th class="n">App requests</th><th class="n">Instant</th><th class="n">Average</th><th class="n">Checked</th><th class="n">Prepared</th><th class="n">Time</th></tr>
+    ${p.daily.slice().reverse().filter(x => x.n || x.checked).map(x => `<tr><td style="white-space:nowrap">${esc(dayname(x.day))} ${esc(x.day.slice(5))}</td><td class="n">${x.n}</td><td class="n">${x.pct == null ? "–" : x.pct + "%"}</td><td class="n">${ms(x.avg_ms)}</td><td class="n">${x.checked}</td><td class="n">${x.prepared}</td><td class="n">${x.prepare_s ? dur(x.prepare_s) : "–"}</td></tr>`).join("")}</table>
+    <p class="sub" style="margin-top:10px">App requests come from the Plex log. Checked and prepared are the warmer's own requests: a checked poster was either already in Plex's image cache or was prepared then. ${p.queued ?? 0} queued · request forms learned for ${p.accounts} accounts (${p.shared_forms} shared between users, ${p.user_forms} per user).</p></div></div></div>`;
+}
+function workChart(work){
+  if (!work.length) return "";
+  return stack(work.map(w => ({label: w.hour.slice(11) + ":00", title: `${w.hour.replace("T", " ")}:00`, vals: [w.n - w.cold, w.cold], extra: `rebuild time: ${dur(w.cold_s)}\npass duration: ${dur(w.took)}`})),
+    {names: ["Already cached", "Rebuilt"], colors: ["var(--c0)", "var(--c2)"], every: Math.ceil(work.length / 12), h: 160, maxbar: 40});
+}
+const mini = b => { const t = b.reduce((a, c) => a + c, 0) || 1; return `<span class="mini" title="${esc(b.map((v, i) => v ? `${SPEED[i]}: ${v}` : "").filter(Boolean).join(" · "))}">${b.map((v, i) => v ? `<i style="width:${100*v/t}%;background:${SPEEDC[i]}"></i>` : "").join("")}</span>`; };
+function heat(how){
+  if (!how) return "";
+  const mx = Math.max(1, ...how), days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  let h = `<div class="heat"><span></span>${[...Array(24)].map((_, i) => `<span>${i % 6 ? "" : i}</span>`).join("")}`;
+  days.forEach((d, di) => { h += `<span>${d}</span>` + how.slice(di*24, di*24+24).map((c, i) => `<div title="${d} ${i}:00 - ${c} requests" style="background:${c ? `rgba(var(--heat),${0.15 + 0.85*c/mx})` : "var(--line)"}"></div>`).join(""); });
+  return h + `</div>`;
+}
+
+// ---------- tabs ----------
+function overview(d){
+  const lt = d.loads.today, ht = d.hits.today, wk = d.hits.week, thr = `${d.slow_s} s`, started = d.first_run ? new Date(d.first_run * 1000).toISOString().slice(0, 10) : null, owner = d.me.role === "owner";
+  const pct = (a, b) => b ? `${Math.round(1000 * a / b) / 10}%` : "–";
+  const pt = d.posters.daily[d.posters.daily.length - 1];
+  let h = `<div class="tiles">
+    <div class="tile"><div class="k">Median load time</div><div class="v">${ms(lt.p50_ms)}</div><div class="s">${lt.n} loads today · 95th percentile ${ms(lt.p95_ms)}</div></div>
+    <div class="tile"><div class="k">Slow loads</div><div class="v">${ht.n ? ht.slow : "–"}</div><div class="s">${pct(ht.slow, ht.n)} of loads today · over ${thr}</div></div>
+    <div class="tile"><div class="k">Cache hit rate</div><div class="v">${ht.pct == null ? "–" : ht.pct + "%"}</div><div class="s">${ht.hit} of ${ht.n} loads today · ${wk.pct == null ? "–" : wk.pct + "%"} over 7 days</div></div>
+    <div class="tile"><div class="k">Tracked requests</div><div class="v">${d.counts.requests}</div><div class="s">${d.counts.accounts} accounts${d.watching ? ` · ${d.watching} playing` : ""}</div></div>
+    <div class="tile"><div class="k">Posters prepared today</div><div class="v">${(d.posters.today || {}).built ?? 0}</div><div class="s">${(d.posters.today || {}).requests ?? 0} checked · ${d.posters.queued ?? 0} queued${pt.pct == null ? "" : ` · ${pt.pct}% of app requests instant`}</div></div>
+    <div class="tile"><div class="k">Pre-built today</div><div class="v">${dur(d.saved.today)}</div><div class="s">${dur(d.saved.week)} over 7 days</div></div>
+    <div class="tile"><div class="k">Last pass</div><div class="v" style="font-size:20px">${ago(d.last_warm)}</div><div class="s">Probe ${d.last_probe ? d.last_probe.seconds + " s" : "–"}</div>
+      ${owner ? `<div style="margin-top:8px"><button class="primary" id="warm" onclick="warm()">Run now</button></div>` : ""}</div></div>`;
+  h += `<div class="grid2"><div class="card"><h2>Load time distribution</h2><p class="sub">Share of row loads in each time band, per day. The figure above each bar is the number of loads.</p>${dailyChart(d.loads.daily, {started})}${legend(SPEED, SPEEDC)}</div>
+    <div class="card"><h2>Slow loads by cause</h2><p class="sub">Loads over ${thr} per day, grouped by what invalidated the cache.</p>${causeChart(d.hits.daily)}${legend(CAUSES.map(cname), CAUSEC)}</div></div>`;
+  h += `<div class="card"><h2>Hourly load times</h2><p class="sub">Loads per hour over the last 48 hours, by time band.</p>${hourlyChart(d.loads.hourly)}${legend(SPEED, SPEEDC)}</div>`;
+  h += screensCard(d);
+  h += postersCard(d);
+  if (owner) h += slowLoads(d) + rowCosts(d) + (d.work && d.work.length ? `<div class="card"><h2>Warmer activity</h2><p class="sub">Requests replayed per hour over the last 48 hours.</p>${workChart(d.work)}${legend(["Already cached", "Rebuilt"], ["var(--c0)", "var(--c2)"])}</div>` : "");
+  if (owner && d.runs && d.runs.length) h += `<div class="card"><h2>Recent passes</h2>
+    <table><tr><th>Time</th><th class="n">Accounts</th><th class="n">Requests</th><th class="n">Rebuilt</th><th class="n">Rebuild time</th><th class="n">Duration</th></tr>
+    ${d.runs.slice(-15).reverse().map(r => `<tr><td>${ago(r.ts)}</td><td class="n">${r.accounts ?? "–"}</td><td class="n">${r.n}</td><td class="n">${r.cold}</td><td class="n">${dur(r.cold_s)}</td><td class="n">${dur(r.took)}</td></tr>`).join("")}</table></div>`;
+  return h;
+}
+
+const causeText = {"own playback": "The account's own playback invalidated its rows shortly before the request.", "library change": "Items were added, changed or removed shortly before the request.", "row changed": "A collection was edited, or a smart collection was due for re-evaluation.", "new app or screen": "This client or screen had not been seen before. It is tracked from now on.", "other": "The cached rows had expired and were not rebuilt before the request.", "not cache related": "All rows came from the cache. The request waited on something else, such as an identical request already building the same rows, or server load."};
+function screensCard(d){
+  if (!d.screens || !d.screens.length) return "";
+  return `<div class="card"><h2>Screens</h2><p class="sub">Seven-day totals for each screen.</p>
+    <table><tr><th>Screen</th><th class="n">Loads</th><th>Distribution</th><th class="n">Under 1 s</th><th class="n">Median</th><th class="n">95th pct.</th><th class="n">Over 2 s</th></tr>
+    ${d.screens.slice(0, 12).map(r => `<tr><td>${esc(r.screen)}</td><td class="n">${r.n}</td><td>${mini(r.b)}</td><td class="n">${r.under1s}%</td><td class="n">${ms(r.p50_ms)}</td><td class="n">${ms(r.p95_ms)}</td><td class="n">${r.b.slice(4).reduce((a, c) => a + c, 0)}</td></tr>`).join("")}</table></div>`;
+}
+function slowLoads(d){
+  const w = d.hits.week, thr = `${d.slow_s} s`, c = Object.entries(w.causes).sort((a, b) => (w.waits[b[0]] || 0) - (w.waits[a[0]] || 0));
+  if (!w.n) return "";
+  let h = `<div class="card"><h2>Slow loads</h2><p class="sub">Loads that took longer than ${thr}: ${w.slow} of ${w.n} in the last 7 days. The threshold is set under Settings.</p>`;
+  if (!w.slow) return h + `<p class="muted">None in the last 7 days.</p></div>`;
+  h += `<table><tr><th>Cause</th><th class="n">Loads</th><th class="n">Total</th><th class="n">Average</th><th>Description</th></tr>${c.map(([k, v]) => `<tr><td style="white-space:nowrap"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${CAUSEC[CAUSES.indexOf(k)] || "var(--c0)"};margin-right:6px"></i>${esc(cname(k))}</td><td class="n">${v}</td><td class="n">${dur((w.waits[k] || 0) / 1000)}</td><td class="n">${ms(Math.round((w.waits[k] || 0) / v))}</td><td class="muted">${esc(causeText[k] || "")}</td></tr>`).join("")}</table>`;
+  if (d.misses && d.misses.length) h += `<h3>Most recent</h3><table><tr><th>Time</th><th>Account</th><th>Screen</th><th class="n">Duration</th><th>Cause</th><th>Rebuilt rows</th></tr>${d.misses.slice(0, 15).map(m => `<tr><td style="white-space:nowrap">${esc(m.ts.replace("T", " ").slice(5, 16))}</td><td style="white-space:nowrap">${esc(m.name)}</td><td style="white-space:nowrap">${esc(m.what)}</td><td class="n">${ms(m.ms)}</td><td style="white-space:nowrap">${esc(cname(m.why))}</td><td class="why">${m.rows ? `${m.rows}${m.top && m.top.length ? " – " + m.top.map(t => `${esc(t[0])} (${ms(t[1])})`).join(", ") + (m.rows > m.top.length ? ", …" : "") : ""}` : "none"}</td></tr>`).join("")}</table>`;
+  return h + `</div>`;
+}
+function rowCosts(d){
+  const r = d.rows;
+  if (!r || !r.top.length) return "";
+  const mx = Math.max(...r.top.map(x => x.avg_ms));
+  return `<div class="card"><h2>Row build cost</h2><p class="sub">Time Plex takes to build each row when it is not cached. A cold screen costs about the sum of its rows. Source: Plex log, read ${ago(r.ts)}.</p>
+    <div class="row" style="margin-bottom:10px">${r.libraries.map(l => `<span class="pill">${esc(l.library)}: ${ms(l.cold_ms)} total</span>`).join("")}</div>
+    <table><tr><th>Row</th><th>Library</th><th>Type</th><th>Average</th><th class="n">Maximum</th><th class="n">Builds</th></tr>
+    ${r.top.slice(0, 20).map(x => `<tr><td>${esc(x.row)}</td><td>${esc(x.library)}</td><td>${x.kind === "collection" ? "Collection" : "Built-in"}</td><td><span class="hb" style="width:${Math.max(2, 140 * x.avg_ms / mx)}px"></span>${ms(x.avg_ms)}</td><td class="n">${ms(x.max_ms)}</td><td class="n">${x.n}</td></tr>`).join("")}</table></div>`;
+}
+
+function sw(kind, id, on, owner){
+  return owner ? `<label class="sw" onclick="event.stopPropagation()"><input type="checkbox" ${on ? "checked" : ""} onchange="toggle('${kind}','${esc(id)}',this.checked)"><i></i>${on ? "Enabled" : "Disabled"}</label>` : "";
+}
+function accounts(d){
+  const owner = d.me.role === "owner";
+  let h = `<p class="muted">${owner ? "Accounts and devices learned from the Plex log. A device shows its own name once it has played something. Warming can be disabled per account or per device." : "Devices on your account."}</p>`;
+  if (!d.accounts.length) return h + `<p class="muted">${owner ? "No requests learned yet." : "No requests learned for your account yet. They appear after you next open Plex."}</p>`;
+  const open = new Set([...document.querySelectorAll("details.acct[open]")].map(e => e.dataset.id));
+  d.accounts.forEach(a => {
+    const lt = a.daily[a.daily.length - 1], reqs = a.devices.reduce((s, x) => s + x.requests.length, 0);
+    h += `<details class="acct ${a.enabled ? "" : "off"}" data-id="${esc(a.id)}" ${open.has(a.id) || !owner ? "open" : ""}><summary>
+      <span class="nm">${esc(a.name)}</span>${sw("accounts", a.id, a.enabled, owner)}
+      <span class="meta">${a.devices.length} device${a.devices.length === 1 ? "" : "s"} · ${reqs} requests${a.reason ? ` · ${esc(reason(a.reason))}` : ""}${a.last_active ? ` · active ${ago(a.last_active)}` : ""}${lt.n ? ` · today ${lt.n} loads, median ${ms(lt.p50_ms)}` : ""}</span></summary><div class="body">
+      <div class="grid2"><div><h3>Load time distribution</h3>${dailyChart(a.daily, {h: 120, w: 520})}</div>${owner && a.usual ? `<div><h3>Usual hours</h3><p class="sub">Row loads by hour of the week. Used by smart mode.</p>${heat(a.usual)}</div>` : ""}</div>`;
+    a.devices.forEach(v => {
+      const dt = v.daily[v.daily.length - 1];
+      h += `<div class="dev ${v.enabled ? "" : "off"}"><div class="hd"><span class="t">${esc(v.title)}</span><span class="meta">${esc(v.extra)}</span>${sw("devices", a.id + "|" + v.key, v.enabled, owner)}
+        <span class="meta">${dt.n ? `Today: ${dt.n} loads, median ${ms(dt.p50_ms)}` : "No loads today"}</span></div>
+        <div class="grid2" style="margin-top:6px"><div>${dailyChart(v.daily, {h: 90, w: 520, small: true})}</div>
+        <table><tr><th></th><th>Screen</th><th>Client</th><th class="n">Last replay</th><th>Replayed</th><th>Last used</th></tr>
+        ${v.requests.map(r => `<tr><td><span class="dot ${r.last_s == null ? "none" : r.was_cold ? "cold" : ""}" title="${r.last_s == null ? "Not replayed yet" : r.was_cold ? "Rebuilt on last replay" : "Cached on last replay"}"></span></td><td>${esc(r.what)}</td><td>${esc(r.app)} · ${esc(r.lang)}</td><td class="n">${r.last_s == null ? "–" : r.last_s + " s"}</td><td>${ago(r.warmed)}</td><td>${ago(r.seen)}</td></tr>`).join("")}</table></div></div>`;
+    });
+    h += `</div></details>`;
+  });
+  return h;
+}
+
+function settings(d){
+  const sc = d.schedule, why = sc.plan.why || {};
+  let h = `<div class="tiles">
+    <div class="tile"><div class="k">Next check</div><div class="v" style="font-size:22px">${until(sc.next_check)}</div><div class="s">A pass starts if the probe finds the cache cleared</div></div>
+    <div class="tile"><div class="k">Next scheduled pass</div><div class="v" style="font-size:22px">${until(sc.next_top_up)}</div><div class="s">Last pass ${ago(d.last_warm)}</div></div>
+    <div class="tile"><div class="k">Next log read</div><div class="v" style="font-size:22px">${sc.next_learn ? until(sc.next_learn) : "–"}</div><div class="s">Learns new clients and measures loads</div></div>
+    <div class="tile"><div class="k">Next pass</div><div class="v" style="font-size:22px">${sc.plan.requests ?? "–"} requests</div><div class="s">${sc.plan.accounts ?? "–"} accounts · ${esc(sc.mode)} mode</div></div></div>`;
+  h += `<div class="card"><h2>Current plan</h2><p class="sub">What the next pass will do for each account.</p>
+    <table><tr><th>Account</th><th>Status</th></tr>${Object.entries(why).sort().map(([n, r]) => `<tr><td>${esc(n)}</td><td>${esc(reason(r))}</td></tr>`).join("") || `<tr><td colspan="2" class="muted">Available after the first check.</td></tr>`}</table></div>`;
+  h += `<div class="card"><h2>Settings</h2><p class="sub">Changes take effect on the next check, without a restart. The Plex address is tested when saved.</p><div id="sets">`;
+  d.settings.forEach(s => {
+    const input = s.key === "mode"
+      ? `<select data-k="mode" onchange="dirty=true">${["always","smart"].map(m => `<option ${m === s.value ? "selected" : ""}>${m}</option>`).join("")}</select>`
+      : s.type === "switch"
+      ? `<label class="sw"><input data-k="${esc(s.key)}" type="checkbox" ${s.value ? "checked" : ""} onchange="dirty=true;this.parentNode.lastChild.textContent=this.checked?'On':'Off'"><i></i><span>${s.value ? "On" : "Off"}</span></label>`
+      : s.type === "str"
+      ? `<input data-k="${esc(s.key)}" type="text" value="${esc(s.value)}" placeholder="${esc(s.example || "")}" style="width:22em;max-width:100%" oninput="dirty=true">`
+      : `<input data-k="${esc(s.key)}" type="number" step="${s.type === "int" ? 1 : "any"}" min="${s.min}" max="${s.max}" value="${s.value}" oninput="dirty=true">`;
+    h += `<div class="set"><div>${esc(s.label)}${s.changed ? `<span class="chg">modified</span>` : ""}</div><div>${input}${s.changed ? ` <button class="link" onclick="resetSetting('${esc(s.key)}')">Reset to ${s.type === "switch" ? (s.default ? "On" : "Off") : esc(s.default === "" ? "default" : s.default)}</button>` : ""}</div><div class="h">${esc(s.help)}</div></div>`;
+  });
+  h += `</div><div class="row" style="margin-top:12px"><button class="primary" onclick="saveSettings()">Save</button><span id="saved" class="muted"></span></div></div>`;
+  h += `<div class="card"><h2>Start-up options</h2><p class="sub">Read once when the container starts: where the data is kept and who may open this page. Addresses found automatically for this container: ${esc((d.self_ips_found || []).join(", ") || "none yet")}.</p><table>${Object.entries(d.fixed).map(([k, v]) => `<tr><td><code>${esc(k)}</code></td><td>${esc(v)}</td></tr>`).join("")}</table></div>`;
+  return h;
+}
+
+function render(d){
+  D = d;
+  const owner = d.me.role === "owner";
+  const st = {idle:["Idle","ok"], warming:["Running","warn"], error:["Error","bad"], starting:["Starting","warn"], "waiting-for-setup":["Setup required","warn"]}[d.state] || [d.state,""];
+  $("#state").className = "pill " + st[1]; $("#state").textContent = st[0];
+  const tabs = [["overview","Overview"],["accounts", owner ? "Accounts" : "My devices"]].concat(owner ? [["settings","Settings"]] : []);
+  if (!tabs.some(t => t[0] === tab)) tab = "overview";
+  $("#nav").innerHTML = tabs.map(([k, l]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${l}</a>`).join("");
+  $("#me").innerHTML = `${d.me.thumb ? `<img src="${esc(d.me.thumb)}" alt="">` : ""}<span>${esc(d.me.name)} · ${owner ? "Owner" : "Shared user"}</span>${d.me.user !== "local" ? `<button onclick="logout()">Sign out</button>` : ""}`;
+  if (tab === "settings" && dirty) return;        // don't overwrite unsaved edits
+  let h = "";
+  if (d.need_address) h += `<div class="banner">The Plex Media Server address is not set. ${owner ? `Enter it under <a href="#settings">Settings</a>.` : ""}</div>`;
+  if (d.debug_logging_ok === false) h += `<div class="banner">Plex debug logging is off, so new clients cannot be learned. Enable it in Plex under Settings → General → Enable Plex Media Server debug logging.</div>`;
+  if (d.error) h += `<div class="banner">Last pass failed: ${esc(d.error)}</div>`;
+  h += tab === "accounts" ? accounts(d) : tab === "settings" ? settings(d) : overview(d);
+  h += `<p class="muted" style="font-size:12px">hub-warmer ${esc(d.version)} · <a class="muted" href="/metrics">/metrics</a></p>`;
+  $("#app").innerHTML = h;
+}
+
+async function load(){
+  try { const r = await fetch("/api/status", {cache: "no-store"});
+    if (r.status === 401) { const j = await r.json(); return signin(j.setup_needed, j.need_address, j.plex_url); }
+    render(await r.json());
+  } catch (e) { $("#state").className = "pill bad"; $("#state").textContent = "Offline"; }
+}
+async function warm(){ $("#warm").disabled = true; await post("/api/warm"); setTimeout(load, 3000); }
+async function logout(){ await post("/logout"); location.href = "/"; }
+async function toggle(kind, id, enabled){ await post("/api/toggle", {kind, id, enabled}); load(); }
+async function saveSettings(){
+  const changes = {}; document.querySelectorAll("#sets [data-k]").forEach(el => { const s = D.settings.find(x => x.key === el.dataset.k); const v = el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value; if (String(s.value) !== v) changes[el.dataset.k] = v; });
+  const [ok, j] = await post("/api/settings", {changes});
+  $("#saved").textContent = ok ? (Object.keys(changes).length ? "Saved" : "No changes") : (j.errors || ["failed"]).join(" · ");
+  if (ok) { dirty = false; setTimeout(load, 500); }
+}
+async function resetSetting(k){ const [ok] = await post("/api/settings", {changes: {[k]: null}}); if (ok) { dirty = false; load(); } }
+window.addEventListener("hashchange", () => { tab = location.hash.slice(1) || "overview"; dirty = false; if (D) render(D); });
+load(); setInterval(load, 20000);
+</script>
+</body>
+</html>
