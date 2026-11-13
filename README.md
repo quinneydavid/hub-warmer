@@ -1,16 +1,23 @@
 # Hub Warmer
 
-Hub Warmer keeps the rows on Plex's Home screen and library pages ("hubs") in Plex's cache, for every account and client that uses a server. Pages that would otherwise take several seconds to build are served from cache.
+On a Plex server with many collection rows, the Home screen and library pages can take several seconds to
+open. Plex builds each row on request and keeps the result in a cache, and that cache is cleared whenever the
+library changes, whenever an account plays something, and after a day without use. The next person to open the
+app waits while every row is rebuilt.
 
-It runs as a small container next to Plex Media Server. It is an independent project, not affiliated with or endorsed by Plex. It needs no Plex plugin and does not modify the library. A web page (Sign in with Plex), Prometheus metrics and a Grafana dashboard report what it is doing and how long real page loads take.
+Hub Warmer keeps those rows in Plex's cache, for every account and every device that uses the server, so the
+screens open without the wait.
 
 ![The Overview page: load times, slow loads, cache hit rate and charts for the last seven days](docs/screenshots/overview.png)
 
-The screenshots on this page show invented demo data, not a real server.
+The screenshots on this page show invented demo data.
+
+An independent project, with no affiliation to or endorsement by Plex.
 
 ## Contents
 
-- [Background](#background)
+- [The problem](#the-problem)
+- [What it does](#what-it-does)
 - [How it works](#how-it-works)
 - [What to expect](#what-to-expect)
 - [Requirements](#requirements)
@@ -26,18 +33,74 @@ The screenshots on this page show invented demo data, not a real server.
 - [Development](#development)
 - [License](#license)
 
-## Background
+## The problem
 
-Plex builds each row on the Home screen and on library pages on request: "Recently Added", "Continue Watching", and every pinned collection is one or more database queries. A page with many collection rows (as created by Kometa, Agregarr or Plex's own recommendations) can take seconds to build.
+Plex builds each row on the Home screen and on library pages on request. "Recently Added", "Continue Watching"
+and every pinned collection ("hubs") is one or more database queries. A page with many collection rows, as
+created by Kometa, Agregarr or Plex's own recommendations, can take several seconds to build.
 
 Plex caches the built rows, but the cache is narrow and short-lived:
 
-- An entry belongs to one account and one exact request, including the client's language and feature flags. A television, a phone and a browser on the same account each have their own entries.
-- Entries are discarded when the library changes (new items, metadata refreshes, collection edits), when the account's own playback state changes, and after 24 hours without use.
+- An entry belongs to one account and one exact request, including the device's language and feature flags.
+  A television, a phone and a browser on the same account each have their own entries.
+- Entries are discarded when the library changes (new items, metadata refreshes, collection edits), when the
+  account's own playback state changes, and after 24 hours without use.
 
 After entries are discarded, the next person to open that page waits while every row is rebuilt.
 
-On the reference server, with two dozen collection rows, the Movies page took 4.5–9 seconds to load whenever its cache entries had been discarded.
+On the reference server, with two dozen collection rows, the Movies page took
+4.5–9 seconds to load whenever its cache entries had been discarded. A page whose rows are cached typically
+loads in 0.1–0.5 seconds.
+
+## What it does
+
+Hub Warmer runs as a small container next to Plex Media Server. It needs no Plex plugin, makes no changes to
+the library, and needs no configuration per user or device. It does three things:
+
+- **Keeps the rows cached.** It learns which screens each account's devices open, and has Plex rebuild them
+  whenever the cache is cleared, before anyone opens the app.
+- **Prepares the posters.** It requests the poster images of every warmed screen in advance, in the sizes each
+  device uses, so the pictures are ready as well.
+- **Measures real load times.** A web page shows how long Home and library pages take for real users, how often
+  they come from cache, and the cause of every slow load.
+
+### Warming
+
+- **Learns each device by itself.** It reads Plex's debug log to find the requests each account's devices make.
+  A new device is picked up the first time it is used.
+- **Detects a cleared cache.** A probe request every two minutes shows whether Plex has cleared its cache, and
+  a warming pass starts when it has.
+- **Rebuilds the rows as each account.** It repeats every learned request as that account, with that device's
+  headers, so Plex fills the same cache entries the device will read.
+- **Follows playback.** Plex discards an account's rows while it is watching. The device that is playing is
+  skipped until playback ends, and is then warmed first. The account's other devices stay warm.
+- **Works to a schedule.** In smart mode, Home is kept warm for every account on every pass. Library pages are
+  warmed during the hours each account normally uses Plex, learned per hour of the week, and for two hours
+  after any activity.
+- **Limits its own load.** Requests are sent one at a time, each pass has a time budget, and passes can be
+  paused while transcodes are running.
+
+### Reporting
+
+- **Load times for real users.** Median and 95th-percentile load time, the share of loads served from cache,
+  and the distribution per day and per hour.
+- **Every slow load with its cause.** Each load over the threshold is listed with the account, the screen, the
+  duration, why the cache was empty (the account was playing, the library was updated, a collection changed)
+  and the rows Plex had to rebuild.
+- **The cost of each row.** How long Plex takes to build each row, which shows the collections that slow
+  every uncached load.
+- **Accounts and devices.** Each device with its own load times and tracked screens. Warming can be switched
+  off per account or per device.
+- **Metrics.** Prometheus metrics and a Grafana dashboard for the same figures.
+
+The server owner signs in with Plex and sees everything. Accounts the server is shared with see the overall
+figures and their own devices.
+
+### When it helps
+
+Hub Warmer is most useful on a server with several collection or recommendation rows, a library that changes
+often, or many accounts and devices. A server whose Home and library pages already load quickly has no need
+for it.
 
 ## How it works
 
