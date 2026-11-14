@@ -9,6 +9,7 @@ import urllib.error, urllib.parse, urllib.request, zipfile
 import xml.etree.ElementTree as ET
 
 from . import __version__, config as C
+from .events import LibraryEvents
 from .settings import Settings
 from .store import Store, log
 
@@ -141,10 +142,14 @@ def _epoch(stamp):
     return v
 
 
-def miss_cause(event):
-    """why Plex had dropped the rows a real user then had to wait for"""
+def miss_cause(event, age=0):
+    """why Plex had dropped the rows a real user then had to wait for. event: the account's last HubCache
+    expiry before the request (None = none in the log), age: seconds between that expiry and the request.
+    An expiry older than 15 minutes means a pass could have rebuilt the rows and had not."""
     if event is None:
         return "other"
+    if age > 900:
+        return "not rewarmed"
     if "play" in event:
         return "own playback"
     if not event:
@@ -209,6 +214,8 @@ class Warmer:
         self.partial = set()             # accounts the current plan warms Home for only
         self.next_check = 0
         self.last_plan = {}
+        self.events = LibraryEvents(self)
+        self.last_pass_end = 0.0
 
     # ---------- tokens / identity ----------
     def owner_token(self):
@@ -500,6 +507,8 @@ class Warmer:
                                         why = miss_cause(le[1])
                                     elif lp and -3600 < lp - r["t"] < 15:    # the account has been watching
                                         why = "own playback"
+                                    elif le and le[0] - r["t"] <= -900:
+                                        why = miss_cause(le[1], r["t"] - le[0])
                                     else:
                                         why = miss_cause(None)
                                 hits.append((ts, a, why, int(d.group(5)), r["miss"], r["url"],
@@ -658,7 +667,7 @@ class Warmer:
         return todo, why, prio
 
     # ---------- one pass ----------
-    def run_once(self, force=False, only_user=None, dry_run=False):
+    def run_once(self, force=False, only_user=None, dry_run=False, label=""):
         otoken = self.owner_token()
         if not otoken or not self.S.get("plex_url"):     # nothing to do until the page has both (see web.py)
             self.state = "waiting-for-setup"
@@ -691,10 +700,10 @@ class Warmer:
             log(f"skipping: {n_tc} transcodes > {S.get('pause_above_transcodes')}")
             self.state = "idle"
             return
-        self._warm(todo, prio, otoken, dry_run=dry_run, full=full, no_budget=bool(only_user))
+        self._warm(todo, prio, otoken, dry_run=dry_run, full=full, no_budget=bool(only_user), label=label)
         self.state = "idle"
 
-    def _warm(self, todo, prio, otoken, dry_run=False, full=True, no_budget=False):
+    def _warm(self, todo, prio, otoken, dry_run=False, full=True, no_budget=False, label=""):
         """Replay todo. Most urgent accounts first (then whoever waited longest); stops starting new accounts
         once the time budget is used - the rest go first on the next pass."""
         st, S = self.store, self.S
@@ -737,7 +746,8 @@ class Warmer:
         took = time.time() - t0
         log(f"warmed {n} requests for {len(done)} accounts ({cold} were cold, {errors} errors) in {took:.1f}s"
             + (f"; time budget reached, {left} requests wait for the next pass" if left else "")
-            + ("" if full else " [after playback]"))
+            + (f" [{label}]" if label else "" if full else " [after playback]"))
+        self.last_pass_end = time.time()
         if not dry_run:
             st.note_run(n, cold, cold_s, errors, took, per_acct, [a for a in done if a not in self.partial],
                         full=full, n_accounts=len(done))
@@ -827,19 +837,26 @@ class Warmer:
     def loop(self, stop):
         log(f"hub-warmer {__version__}: Plex {self.S.get('plex_url') or '(not set: open the web page)'}, "
             f"logs {self.S.get('plex_logs')}, data {C.DATA_DIR}")
+        self.events.start(stop)
+        label = ""
         while not stop.is_set():
-            force, self.force_next = self.force_next, False
+            force, self.force_next = self.force_next or bool(label), False
             try:
-                self.run_once(force=force)
+                self.run_once(force=force, label=label)
                 self.last_error = ""
             except Exception as e:
                 self.state, self.last_error = "error", repr(e)
                 log(f"run failed: {e!r}")
+            label = ""
             wait = self.S.get("interval_seconds")
             self.next_check = time.time() + wait
             while not stop.is_set():
+                if self.events.due(self.last_pass_end):        # the library changed: warm now, not at the next check
+                    label = self.events.take()
+                    break
                 left = self.next_check - time.time()
-                if left <= 0 or self.wake.wait(min(left, self.S.get("session_poll_seconds"))):
+                step = min(left, self.S.get("session_poll_seconds"), 5 if self.events.pending else 3600)
+                if left <= 0 or self.wake.wait(step):
                     break
                 try:
                     self.tick()

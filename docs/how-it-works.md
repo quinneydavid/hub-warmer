@@ -68,13 +68,14 @@ The warmer's replays appear in the Plex log like any other request and must not 
 
 ### 3. Detect
 
+- **Library changes.** The warmer keeps a connection open to Plex's notification feed (`/:/eventsource/notifications?filters=timeline,activity`, as the owner). A timeline entry for the library in state 5 (processed) or 9 (removed), or a `library.*` activity that has ended, counts as a library change: new and removed items, metadata refreshes and collection edits. Changes usually arrive in bursts while a scan runs, so a pass starts once none has arrived for the settle time (default 30 seconds), at the latest five settle periods after the first, and never sooner than the settle time after the previous pass. If the feed is lost the warmer reconnects with increasing delays and relies on the probe and the schedule meanwhile.
 - **Probe.** Every 2 minutes one hub request is timed. A slow response means the cache has been cleared and starts a pass. The probe is skipped while the owner is playing, because the owner's rows are discarded continuously during playback.
 - **Devices.** The request log records only an address, so the warmer also reads Plex's per-second traffic statistics per account and device (`/statistics/bandwidth?timespan=6`, kept by Plex for a few minutes) every 30 seconds. A page request is attributed to the device on that account that was transferring data at that second. When two devices were both busy, the request keeps its address only.
 - **Sessions.** Every 15 seconds `/status/sessions` is read. An account with an active session is skipped. When its session ends, the account is warmed immediately, starting with the requests from the device that was playing. Session data also provides device names.
 
 ### 4. Replay
 
-A pass runs when the probe is slow, when a session has ended, and at least every 5 minutes. In smart mode it replays the Home screen requests (`/hubs/promoted`, `/hubs/continueWatching`) of every account, and all learned requests of the accounts that are due:
+A pass runs when the library has changed, when the probe is slow, when a session has ended, and at least every 5 minutes. In smart mode it replays the Home screen requests (`/hubs/promoted`, `/hubs/continueWatching`) of every account, and all learned requests of the accounts that are due:
 
 - as that account; server access tokens for shared accounts come from plex.tv (`/api/servers/<id>/shared_servers`) and are held in memory only,
 - with that client's `X-Plex-Language` and `X-Plex-Features` headers, so Plex fills the entry the client will read,
@@ -97,7 +98,8 @@ All figures in the web interface and metrics come from the Plex log:
 | Load time | `Completed` line of each real hub request |
 | Cache hit | A real request whose hubs were all `Retrieving … from the cache` |
 | Slow load | A real request longer than the slow load threshold (default 1 s) |
-| Cause of a slow load | The most recent `Expiring` event for that account before the request, or "first request from client" when the request had not been seen before |
+| Cause of a slow load | The most recent `Expiring` event for that account before the request, or "first request from client" when the request had not been seen before. When that event is more than 15 minutes older than the request, the cause is "not rebuilt in time": a pass could have rebuilt the rows and had not, because the account was outside its usual hours or a pass ran out of time. With no event at all, the cause is "expired, no event logged" |
+| Hit rate without own playback | Cache hits divided by all loads except those rebuilt because of the account's own playback, which Plex discards again within seconds |
 | Row build cost | `Computed … in N ms` |
 
 Plex's own hit ratio line counts the warmer's requests as well and is therefore higher than the hit rate for real loads.

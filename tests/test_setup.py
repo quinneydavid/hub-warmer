@@ -167,7 +167,7 @@ class MovedSettings(unittest.TestCase):
         self.S = settings.Settings(self.store)
 
     def test_defaults_and_validation(self):
-        self.assertEqual((self.S.get("history_days"), self.S.get("metrics_public")), (7.0, 1))
+        self.assertEqual((self.S.get("history_days"), self.S.get("metrics_public")), (30.0, 1))
         self.assertEqual(self.S.self_ips(), {"127.0.0.1"})
         self.assertEqual(self.S.update({"self_ips": " 10.0.0.5, 10.0.0.6 "}), [])
         self.assertEqual(self.S.self_ips(), {"127.0.0.1", "10.0.0.5", "10.0.0.6"})

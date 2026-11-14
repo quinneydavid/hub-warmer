@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 (2026-11-14)
+- Library changes start a pass. The warmer follows Plex's notification feed and starts a pass as soon as items have been added, changed or removed, or a collection was edited, once the change has settled (no further change for 30 seconds, at most 150 seconds). Before, a change was noticed at the next probe or scheduled pass, up to five minutes later. Settings `WARM_ON_LIBRARY_CHANGE` and `LIBRARY_SETTLE_SECONDS`; the Overview page shows whether the feed is connected; metrics `library_events_connected`, `library_changes_total`, `library_passes_total`.
+- The cache hit rate is also shown without loads made during the account's own playback, which no warming can keep cached. Every rebuilt load is now counted by cause, not only slow ones: metric `user_row_misses_total`.
+- New slow-load cause "Not rebuilt in time": the rows were dropped more than 15 minutes before the request and no pass had rebuilt them. Before, these were counted as "Cache entry expired", which is now "Expired, no event logged" and only covers loads with no event in the log.
+- Hourly statistics are kept for 30 days instead of 7 (`HISTORY_DAYS`). The seven-day figures on the page still cover seven days.
+
 ## 0.6.1 (2026-11-13)
 First version published on GitHub.
 - Fixed: the container could not start with a new Docker volume (`/data` belonged to root while the app runs as user 1000). The image now owns `/data`; the examples use a named volume and say what a mounted folder needs.

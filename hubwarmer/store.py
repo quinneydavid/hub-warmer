@@ -317,7 +317,8 @@ class Store:
     def add_hits(self, hits, slow_ms=1000):
         """hits: [(iso_ts, acct, 'hit' or the cause of the rebuild, ms, rows rebuilt, url, what, [[hub, ms]..])]
         - real users only. Per hour: n = loads, hit = served entirely from cache, slow = loads over slow_ms,
-        c = slow loads per cause, w = their total ms per cause. Only slow loads are listed individually."""
+        c = slow loads per cause, w = their total ms per cause, m = all rebuilt loads per cause (slow or not).
+        Only slow loads are listed individually."""
         if not hits:
             return
         with self.lock:
@@ -331,6 +332,9 @@ class Store:
                     rec["n"] += 1
                     if why == "hit":
                         rec["hit"] += 1
+                    else:
+                        m = rec.setdefault("m", {})
+                        m[why] = m.get(why, 0) + 1
                     if ms >= slow_ms:
                         rec["slow"] = rec.get("slow", 0) + 1
                         rec["c"][cause] = rec["c"].get(cause, 0) + 1

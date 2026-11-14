@@ -58,6 +58,13 @@ DEFS = {
     "pass_budget_seconds": (int, int(C.env("PASS_BUDGET_SECONDS", "90")), 0, 3600, "Pass time budget (seconds)",
                             "No new accounts are started after this long. Remaining accounts go first on the next "
                             "pass. 0 disables the limit."),
+    "warm_on_library_change": (int, int(C.env("WARM_ON_LIBRARY_CHANGE", "1")), 0, 1, "Warm when the library changes",
+                               "When on, Plex's notification feed is watched and a pass starts as soon as items "
+                               "have been added, changed or removed, instead of at the next scheduled check."),
+    "library_settle_seconds": (int, int(C.env("LIBRARY_SETTLE_SECONDS", "30")), 5, 600, "Library change settle time (seconds)",
+                               "After a library change, wait until no further change has arrived for this long (a "
+                               "scan adds many items in a row), at most five times as long. Also the minimum gap "
+                               "after the previous pass."),
     "warm_posters": (int, int(C.env("WARM_POSTERS", "1")), 0, 1, "Prepare posters",
                      "Plex resizes each poster for the device that asks and keeps the result. When on, the posters "
                      "of every warmed screen are requested in advance, in the sizes each account's apps use."),

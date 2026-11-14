@@ -5,6 +5,10 @@ from . import __version__
 from .store import LOAD_BUCKETS_MS
 
 
+CAUSES = ("own playback", "library change", "row changed", "new app or screen", "not rewarmed", "other",
+          "not cache related")
+
+
 def render(store, warmer):
     with store.lock:
         s = store.stats
@@ -53,8 +57,17 @@ def render(store, warmer):
         m("user_row_cache_hits_total", "counter", "Of those, served entirely from Plex's cache.", ht.get("hit", 0))
         out.append("# HELP hub_warmer_user_slow_loads_total Real users' row loads over the slow-load threshold, by cause.")
         out.append("# TYPE hub_warmer_user_slow_loads_total counter")
-        for cause in ("own playback", "library change", "row changed", "new app or screen", "other", "not cache related"):
+        for cause in CAUSES:
             out.append(f'hub_warmer_user_slow_loads_total{{cause="{cause}"}} {ht.get("c", {}).get(cause, 0)}')
+        out.append("# HELP hub_warmer_user_row_misses_total Real users' row loads that Plex had to rebuild, by cause "
+                   "(slow or not; counted since 0.7.0). \"own playback\" cannot be prevented by warming.")
+        out.append("# TYPE hub_warmer_user_row_misses_total counter")
+        for cause in CAUSES[:-1]:
+            out.append(f'hub_warmer_user_row_misses_total{{cause="{cause}"}} {ht.get("m", {}).get(cause, 0)}')
+        ev = warmer.events
+        m("library_events_connected", "gauge", "1 while Plex's notification feed is connected.", 1 if ev.connected else 0)
+        m("library_changes_total", "counter", "Library changes received from Plex since the start.", ev.changes_total)
+        m("library_passes_total", "counter", "Passes started by a library change since the start.", ev.passes_total)
 
         po = s.get("posters", {})
         m("poster_requests_total", "counter", "Posters requested in advance.", po.get("requests", 0))

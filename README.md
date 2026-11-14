@@ -68,8 +68,11 @@ the library, and needs no configuration per user or device. It does three things
 
 - **Learns each device by itself.** It reads Plex's debug log to find the requests each account's devices make.
   A new device is picked up the first time it is used.
-- **Detects a cleared cache.** A probe request every two minutes shows whether Plex has cleared its cache, and
-  a warming pass starts when it has.
+- **Reacts to library changes.** It follows Plex's notification feed. When items are added, changed or removed,
+  or a collection is edited, a pass starts as soon as the change has settled, so new episodes and films do
+  not leave Home uncached until the next check.
+- **Detects a cleared cache.** A probe request every two minutes shows whether Plex has cleared its cache for
+  any other reason, and a warming pass starts when it has.
 - **Rebuilds the rows as each account.** It repeats every learned request as that account, with that device's
   headers, so Plex fills the same cache entries the device will read.
 - **Follows playback.** Plex discards an account's rows while it is watching. The device that is playing is
@@ -85,8 +88,10 @@ the library, and needs no configuration per user or device. It does three things
 - **Load times for real users.** Median and 95th-percentile load time, the share of loads served from cache,
   and the distribution per day and per hour.
 - **Every slow load with its cause.** Each load over the threshold is listed with the account, the screen, the
-  duration, why the cache was empty (the account was playing, the library was updated, a collection changed)
-  and the rows Plex had to rebuild.
+  duration, why the cache was empty (the account was playing, the library was updated, a collection changed,
+  the rows were dropped earlier and no pass had rebuilt them yet) and the rows Plex had to rebuild.
+- **A hit rate that counts what can be fixed.** The cache hit rate is also shown without the loads made during
+  the account's own playback, which no warming can keep cached.
 - **The cost of each row.** How long Plex takes to build each row, which shows the collections that slow
   every uncached load.
 - **Accounts and devices.** Each device with its own load times and tracked screens. Warming can be switched
@@ -105,12 +110,13 @@ for it.
 ## How it works
 
 1. **Learn.** The warmer reads Plex's debug log to find which row requests each account's clients make. No per-user or per-device configuration is needed; a client is picked up the first time it is used.
-2. **Detect.** A probe request every two minutes shows whether Plex has cleared its cache. Active playback sessions are checked every 15 seconds.
-3. **Replay.** When the cache has been cleared, and on a regular schedule, the warmer repeats each learned request as that account, with that client's headers, so Plex rebuilds the rows before anyone asks for them.
+2. **Detect.** Plex's notification feed reports library changes as they happen. A probe request every two minutes shows whether Plex has cleared its cache for another reason. Active playback sessions are checked every 15 seconds.
+3. **Replay.** When the library has changed, when the cache has been cleared, and on a regular schedule, the warmer repeats each learned request as that account, with that client's headers, so Plex rebuilds the rows before anyone asks for them.
 
 ```mermaid
 flowchart LR
   A[Plex log<br/>HubCache lines] -->|learn requests<br/>per account and client| W(Hub Warmer)
+  N[Plex notification<br/>feed] -->|library changed| W
   P[Probe and<br/>session checks] -->|cache cleared?<br/>playback ended?| W
   W -->|replay as each account,<br/>with its client's headers| X[Plex hub cache]
   U[Clients] -->|rows served from cache| X
@@ -212,7 +218,7 @@ The Overview page on a phone.
 
 ## Metrics
 
-- `/metrics` exposes Prometheus metrics with the prefix `hub_warmer_`. They include a histogram of real load times (`user_row_load_seconds`), the cache hit rate for real loads (`user_row_cache_requests_total`, `user_row_cache_hits_total`), slow loads by cause (`user_slow_loads_total`), and the warmer's own activity. Labels contain no account names.
+- `/metrics` exposes Prometheus metrics with the prefix `hub_warmer_`. They include a histogram of real load times (`user_row_load_seconds`), the cache hit rate for real loads (`user_row_cache_requests_total`, `user_row_cache_hits_total`), slow loads by cause (`user_slow_loads_total`), all rebuilt loads by cause (`user_row_misses_total`), the state of Plex's notification feed (`library_events_connected`, `library_changes_total`, `library_passes_total`), and the warmer's own activity. Labels contain no account names.
 - Plex's own hub cache hit ratio is exported as `hub_warmer_plex_hubcache_hit_ratio`. It includes the warmer's requests, so it overstates the hit rate for real loads.
 - [`grafana/hub-warmer.json`](grafana/hub-warmer.json) is a Grafana dashboard for these metrics.
 - `/api/status` returns the web interface's data as JSON. `/healthz` is for health checks.
@@ -225,6 +231,7 @@ The Overview page on a phone.
 In both modes:
 
 - Playback is tracked per device. The device that is playing is skipped until playback ends or is paused, and is then warmed first. The account's other devices are still kept warm, because people browse on a second device, or share an account, while something plays.
+- A library change reported by Plex starts a pass once no further change has arrived for 30 seconds (at most 150 seconds after the first change), and not sooner than 30 seconds after the previous pass.
 - A pass has a time budget of 90 seconds. Accounts are ordered by urgency (playback ended, recently active, usual hours, idle); accounts that do not fit go first on the next pass.
 - Passes can be paused while more than a set number of transcodes are running.
 
@@ -268,12 +275,14 @@ Every setting on the page also has an environment variable that sets its default
 | `PASS_BUDGET_SECONDS` | `90` | Time budget per pass. `0` disables the limit |
 | `WARM_POSTERS` | `1` | Request the posters of every warmed screen in advance, in the sizes each account's apps use. `0` turns it off; on the Settings page it is an on/off switch |
 | `POSTER_BUDGET_SECONDS` | `45` | Time spent on posters after each pass |
+| `WARM_ON_LIBRARY_CHANGE` | `1` | Start a pass when Plex reports a library change. `0` leaves it to the probe and the schedule |
+| `LIBRARY_SETTLE_SECONDS` | `30` | After a library change, wait until no further change has arrived for this long, at most five times as long. Also the minimum gap after the previous pass |
 | `SLOW_LOAD_SECONDS` | `1.0` | Row loads longer than this are reported as slow loads |
 | `PROBE_SLOW_SECONDS` | `1.0` | Smart mode: a probe request slower than this means the rows were dropped, and a pass starts |
 | `PAUSE_ABOVE_TRANSCODES` | `0` | Skip passes while more than this many transcodes are running. `0` disables the limit |
 | `SMART_IDLE_MINUTES` | `60` | Smart mode: interval for accounts outside their usual hours |
 | `SMART_RECENT_HOURS` | `2` | Smart mode: accounts active within this window are warmed on every pass |
-| `HISTORY_DAYS` | `7` | How long hourly statistics and the list of passes are kept |
+| `HISTORY_DAYS` | `30` | How long hourly statistics and the list of passes are kept. The page's seven-day figures are not affected |
 | `SELF_IPS` | – | Additional addresses whose requests are ignored. The warmer's own address is detected automatically |
 | `PUBLIC_URL` | – | External URL of the page when it is behind a reverse proxy. Used for the sign-in redirect |
 | `SESSION_DAYS` | `30` | How long a sign-in on the page lasts |

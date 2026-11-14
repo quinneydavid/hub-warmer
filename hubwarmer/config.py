@@ -35,4 +35,4 @@ WEB_AUTH = env("WEB_AUTH", "plex")                       # "plex" (Sign in with 
 PUBLIC_URL = env("PUBLIC_URL", "").rstrip("/")           # optional: external URL for the Plex sign-in redirect
 SESSION_DAYS = float(env("SESSION_DAYS", "30"))
 METRICS_PUBLIC = env("METRICS_PUBLIC", "true").lower() in ("1", "true", "yes")   # /metrics without sign-in
-HISTORY_DAYS = float(env("HISTORY_DAYS", "7"))
+HISTORY_DAYS = float(env("HISTORY_DAYS", "30"))

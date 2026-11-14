@@ -100,9 +100,9 @@ async function setAddress(){
 
 // ---------- charts ----------
 const SPEED = ["0.25 s or less", "0.25–0.5 s", "0.5–1 s", "1–2 s", "2–5 s", "5–10 s", "over 10 s"], SPEEDC = [0,1,2,3,4,5,6].map(i => `var(--s${i})`);
-const CAUSES = ["own playback", "library change", "row changed", "new app or screen", "other", "not cache related"];
-const CAUSEN = {"own playback": "Account was playing", "library change": "Library updated", "row changed": "Collection changed", "new app or screen": "First request from client", "other": "Cache entry expired", "not cache related": "Cached, still slow"};
-const CAUSEC = [1,2,3,4,5,6].map(i => `var(--c${i})`), cname = c => CAUSEN[c] || c;
+const CAUSES = ["own playback", "library change", "row changed", "new app or screen", "not rewarmed", "not cache related", "other"];
+const CAUSEN = {"own playback": "Account was playing", "library change": "Library updated", "row changed": "Collection changed", "new app or screen": "First request from client", "not rewarmed": "Not rebuilt in time", "other": "Expired, no event logged", "not cache related": "Cached, still slow"};
+const CAUSEC = [1,2,3,4,5,6,0].map(i => `var(--c${i})`), cname = c => CAUSEN[c] || c;
 const REASON = {"watching now (warms when playback ends)": "Playing – resumes when playback ends", "watching now (other devices kept warm)": "Playing – other devices kept warm", "playback just ended": "Playback ended", "active recently": "Active recently", "usual hours": "Usual hours", "out of hours (idle refresh)": "Idle – refresh due", "out of hours (waiting)": "Idle", "out of hours (home only)": "Idle – Home only", "always": "Every pass", "off": "Disabled", "all devices off": "All devices disabled"};
 const reason = r => REASON[r] || r;
 const legend = (names, colors) => `<div class="lg">${names.map((n, i) => `<span><i style="background:${colors[i]}"></i>${esc(n)}</span>`).join("")}</div>`;
@@ -176,11 +176,11 @@ function overview(d){
   let h = `<div class="tiles">
     <div class="tile"><div class="k">Median load time</div><div class="v">${ms(lt.p50_ms)}</div><div class="s">${lt.n} loads today · 95th percentile ${ms(lt.p95_ms)}</div></div>
     <div class="tile"><div class="k">Slow loads</div><div class="v">${ht.n ? ht.slow : "–"}</div><div class="s">${pct(ht.slow, ht.n)} of loads today · over ${thr}</div></div>
-    <div class="tile"><div class="k">Cache hit rate</div><div class="v">${ht.pct == null ? "–" : ht.pct + "%"}</div><div class="s">${ht.hit} of ${ht.n} loads today · ${wk.pct == null ? "–" : wk.pct + "%"} over 7 days</div></div>
+    <div class="tile"><div class="k">Cache hit rate</div><div class="v">${ht.pct == null ? "–" : ht.pct + "%"}</div><div class="s">${ht.hit} of ${ht.n} loads today · ${wk.pct == null ? "–" : wk.pct + "%"} over 7 days${ht.pct_avoidable == null || !ht.unavoidable ? "" : `<br>${ht.pct_avoidable}% leaving out ${ht.unavoidable} loads during the account's own playback, which no warming can keep cached`}</div></div>
     <div class="tile"><div class="k">Tracked requests</div><div class="v">${d.counts.requests}</div><div class="s">${d.counts.accounts} accounts${d.watching ? ` · ${d.watching} playing` : ""}</div></div>
     <div class="tile"><div class="k">Posters prepared today</div><div class="v">${(d.posters.today || {}).built ?? 0}</div><div class="s">${(d.posters.today || {}).requests ?? 0} checked · ${d.posters.queued ?? 0} queued${pt.pct == null ? "" : ` · ${pt.pct}% of app requests instant`}</div></div>
     <div class="tile"><div class="k">Pre-built today</div><div class="v">${dur(d.saved.today)}</div><div class="s">${dur(d.saved.week)} over 7 days</div></div>
-    <div class="tile"><div class="k">Last pass</div><div class="v" style="font-size:20px">${ago(d.last_warm)}</div><div class="s">Probe ${d.last_probe ? d.last_probe.seconds + " s" : "–"}</div>
+    <div class="tile"><div class="k">Last pass</div><div class="v" style="font-size:20px">${ago(d.last_warm)}</div><div class="s">Probe ${d.last_probe ? d.last_probe.seconds + " s" : "–"}${libEvents(d.library_events)}</div>
       ${owner ? `<div style="margin-top:8px"><button class="primary" id="warm" onclick="warm()">Run now</button></div>` : ""}</div></div>`;
   h += `<div class="grid2"><div class="card"><h2>Load time distribution</h2><p class="sub">Share of row loads in each time band, per day. The figure above each bar is the number of loads.</p>${dailyChart(d.loads.daily, {started})}${legend(SPEED, SPEEDC)}</div>
     <div class="card"><h2>Slow loads by cause</h2><p class="sub">Loads over ${thr} per day, grouped by what invalidated the cache.</p>${causeChart(d.hits.daily)}${legend(CAUSES.map(cname), CAUSEC)}</div></div>`;
@@ -194,7 +194,12 @@ function overview(d){
   return h;
 }
 
-const causeText = {"own playback": "The account's own playback invalidated its rows shortly before the request.", "library change": "Items were added, changed or removed shortly before the request.", "row changed": "A collection was edited, or a smart collection was due for re-evaluation.", "new app or screen": "This client or screen had not been seen before. It is tracked from now on.", "other": "The cached rows had expired and were not rebuilt before the request.", "not cache related": "All rows came from the cache. The request waited on something else, such as an identical request already building the same rows, or server load."};
+const causeText = {"own playback": "The account's own playback invalidated its rows shortly before the request.", "library change": "Items were added, changed or removed shortly before the request.", "row changed": "A collection was edited, or a smart collection was due for re-evaluation.", "new app or screen": "This client or screen had not been seen before. It is tracked from now on.", "not rewarmed": "The rows were dropped more than 15 minutes before the request and no pass had rebuilt them yet: the account was outside its usual hours, or a pass ran out of time.", "other": "The rows were not in the cache, and the Plex log shows no event that dropped them.", "not cache related": "All rows came from the cache. The request waited on something else, such as an identical request already building the same rows, or server load."};
+function libEvents(e){
+  if (!e || !e.enabled) return "";
+  if (!e.connected) return "<br>Library changes: not connected, scheduled passes only";
+  return `<br>Library changes: watched${e.last_change ? ` · last ${ago(e.last_change)}` : ""}${e.pending ? ` · ${e.pending} waiting` : ""}`;
+}
 function screensCard(d){
   if (!d.screens || !d.screens.length) return "";
   return `<div class="card"><h2>Screens</h2><p class="sub">Seven-day totals for each screen.</p>

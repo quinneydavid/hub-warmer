@@ -37,6 +37,8 @@ def build_status(store, warmer, me):
         s, L = store.stats, store.learned
         names = s.get("account_names", {})
         runs = s.get("runs", [])
+        week0 = _days()[0]                   # the "7 days" figures; history itself can be kept longer
+        week_runs = [r for r in runs if datetime.date.fromtimestamp(r["ts"]).isoformat() >= week0]
         day0 = datetime.datetime.combine(datetime.date.today(), datetime.time()).timestamp()
         today_runs = [r for r in runs if r["ts"] >= day0]
         hourly = s.get("loads_hourly", {})
@@ -93,11 +95,18 @@ def build_status(store, warmer, me):
                     causes[c] = causes.get(c, 0) + v
                 for c, v in r.get("w", {}).items():
                     waits[c] = waits.get(c, 0) + v
-            return dict(extra, n=n, hit=hit, pct=round(100 * hit / n, 1) if n else None, causes=causes, waits=waits)
-        hits = {"today": hit_sum([v for k, v in hh.items() if k.startswith(tday)]), "week": hit_sum(list(hh.values())),
+            # misses that no warming can prevent: Plex drops a playing account's rows within seconds, every time
+            unavoidable = sum(r["m"].get("own playback", 0) if "m" in r else r["c"].get("own playback", 0) for r in recs)
+            avoidable_n = n - unavoidable
+            return dict(extra, n=n, hit=hit, pct=round(100 * hit / n, 1) if n else None, causes=causes, waits=waits,
+                        unavoidable=unavoidable,
+                        pct_avoidable=round(100 * hit / avoidable_n, 1) if avoidable_n > 0 else None)
+        hits = {"today": hit_sum([v for k, v in hh.items() if k.startswith(tday)]),
+                "week": hit_sum([v for k, v in hh.items() if k[:10] >= week0]),
                 "daily": [hit_sum([v for k, v in hh.items() if k.startswith(d)], day=d) for d in _days()]}
-        screens = sorted((dict(screen=k, **load_summary(merge_loads(v.values()))) for k, v in s.get("loads_screen", {}).items()),
-                         key=lambda r: -r["n"])
+        screens = sorted((dict(screen=k, **load_summary(merge_loads([r for d, r in v.items() if d >= week0])))
+                          for k, v in s.get("loads_screen", {}).items()), key=lambda r: -r["n"])
+        screens = [r for r in screens if r["n"]]
         ph, pd = s.get("photo_hourly", {}), s.get("posters_daily", {})
         prof = s.get("photo_profiles", {})
 
@@ -140,8 +149,9 @@ def build_status(store, warmer, me):
             "posters": posters,
             "slow_s": S.get("slow_load_seconds"),
             "watching": len(warmer.playing),
+            "library_events": warmer.events.status(),
             "saved": {"today": round(sum(r["cold_s"] for r in today_runs), 1),
-                      "week": round(sum(r["cold_s"] for r in runs), 1),
+                      "week": round(sum(r["cold_s"] for r in week_runs), 1),
                       "total": round(s.get("totals", {}).get("cold_seconds", 0), 1)},
             "loads": {"today": today, "daily": daily, "hourly": hours},
             "accounts": accounts,
