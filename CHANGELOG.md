@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Grafana dashboard: panels for the cache hit rate without own playback, slow and rebuilt loads by cause, the notification feed connection, and the passes started by library changes and by stopped playback. The README says how to import it.
+
 ## 0.8.0 (2026-11-14)
 - Stopped playback starts a short pass. When anyone stops or finishes playing something, Plex discards the collection rows of every account, not only the account that was watching. The warmer now also follows playback on Plex's notification feed and, once no further session has stopped for 60 seconds (at most 180 seconds), rebuilds the Home and library page requests of the accounts that are likely to open Plex now: active in the last two hours or in their usual hours. At least 3 minutes between two such passes; the regular schedule is unchanged. Settings `WARM_ON_PLAYBACK_STOP`, `PLAYBACK_SETTLE_SECONDS`, `PLAYBACK_MIN_GAP_MINUTES`; metrics `playback_stops_total`, `playback_passes_total`.
 - The Recent passes table shows what started each pass: the schedule, a library change, stopped playback, or the end of an account's own playback.

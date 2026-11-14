@@ -222,9 +222,9 @@ The Overview page on a phone.
 
 ## Metrics
 
-- `/metrics` exposes Prometheus metrics with the prefix `hub_warmer_`. They include a histogram of real load times (`user_row_load_seconds`), the cache hit rate for real loads (`user_row_cache_requests_total`, `user_row_cache_hits_total`), slow loads by cause (`user_slow_loads_total`), all rebuilt loads by cause (`user_row_misses_total`), the state of Plex's notification feed (`library_events_connected`, `library_changes_total`, `library_passes_total`), and the warmer's own activity. Labels contain no account names.
+- `/metrics` exposes Prometheus metrics with the prefix `hub_warmer_`. They include a histogram of real load times (`user_row_load_seconds`), the cache hit rate for real loads (`user_row_cache_requests_total`, `user_row_cache_hits_total`), slow loads by cause (`user_slow_loads_total`), all rebuilt loads by cause (`user_row_misses_total`), the state of Plex's notification feed (`library_events_connected`, `library_changes_total`, `library_passes_total`), stopped playback and the collection passes it started (`playback_stops_total`, `playback_passes_total`), and the warmer's own activity. Labels contain no account names.
 - Plex's own hub cache hit ratio is exported as `hub_warmer_plex_hubcache_hit_ratio`. It includes the warmer's requests, so it overstates the hit rate for real loads.
-- [`grafana/hub-warmer.json`](grafana/hub-warmer.json) is a Grafana dashboard for these metrics.
+- [`grafana/hub-warmer.json`](grafana/hub-warmer.json) is a Grafana dashboard for these metrics. Import it under Dashboards > New > Import and choose the Prometheus data source that scrapes `/metrics`. It shows real load times, the cache hit rate with and without the accounts' own playback, slow and rebuilt loads by cause, the notification feed and the passes it started, and the warmer's own work.
 - `/api/status` returns the web interface's data as JSON. `/healthz` is for health checks.
 
 ## Modes and scheduling
