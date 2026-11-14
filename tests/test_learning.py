@@ -1,5 +1,5 @@
 """End-to-end learning from a synthetic Plex log folder (no network: server calls are stubbed)."""
-import json, os, sys, tempfile, unittest
+import json, time, os, sys, tempfile, unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -176,6 +176,27 @@ class Plan(unittest.TestCase):
         todo, why, prio = self.w.plan()
         self.assertEqual(set(todo["42"]), {movies, home})        # TV-only requests would be dropped again at once
         for e in (tv, movies, page, home):
+            self.store.learned["accounts"]["42"].pop(e)
+
+    def test_collection_pass_covers_collection_screens_of_likely_accounts(self):
+        home = json.dumps(["/hubs/promoted?excludeMusic=1", "en", ""])
+        page = json.dumps(["/hubs/sections/2?count=12", "en", ""])
+        cw = json.dumps(["/hubs/continueWatching?x=1", "en", ""])
+        self.store.merge_learned({"42": {home: "5.5.5.5", page: "5.5.5.5", cw: "5.5.5.5"}}, 14, 30)
+        self.w.S.update({"mode": "always"})
+        todo, why, prio = self.w.plan(collections=True)            # always mode: everyone is likely
+        self.assertEqual(set(todo["42"]), {home, page})
+        self.assertNotIn("1", todo)                                # owner has no collection screens learned
+        self.assertEqual(self.w.partial, {"42"})                   # not a full warm of the account
+        self.w.S.update({"mode": "smart"})                         # nobody active, nobody's usual hours
+        self.store.stats.pop("activity", None)
+        todo, why, prio = self.w.plan(collections=True)
+        self.assertEqual(todo, {})
+        self.store.stats["activity"] = {"42": {"last": time.time(), "how": [0] * 168}}
+        todo, why, prio = self.w.plan(collections=True)            # alice was active an hour ago
+        self.assertEqual(set(todo["42"]), {home, page})
+        self.w.S.update({"mode": None})
+        for e in (home, page, cw):
             self.store.learned["accounts"]["42"].pop(e)
 
     def test_paused_stream_does_not_count_as_playing(self):

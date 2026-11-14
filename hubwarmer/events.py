@@ -1,7 +1,9 @@
 """Library changes from Plex's own notification feed (/:/eventsource/notifications).
 
 Plex drops the cached rows of every account as soon as something is added, changed or removed. Without this
-feed the warmer only notices at its next check; with it, a pass starts once the change has settled."""
+feed the warmer only notices at its next check; with it, a pass starts once the change has settled.
+Plex also drops every account's collection rows when someone stops or finishes playing something; the same feed
+reports that, and a shorter pass over the collection rows follows."""
 import json, threading, time, urllib.request
 
 from . import __version__
@@ -47,6 +49,35 @@ def library_changes(event, data):
     return out
 
 
+PLAY_FORGET = 6 * 3600                   # a session not heard of for this long is forgotten
+
+
+def playback_stops(event, data, states, now=None):
+    """One notification -> number of playback sessions that just stopped. states = {session key: (state, when)},
+    updated in place: a session counts once when it changes to "stopped", not on repeated stopped reports."""
+    if not isinstance(data, dict):
+        return 0
+    if isinstance(data.get("NotificationContainer"), dict):
+        data = data["NotificationContainer"]
+    items = data.get("PlaySessionStateNotification")
+    if isinstance(items, dict):
+        items = [items]
+    now = now or time.time()
+    stops = 0
+    for p in items if isinstance(items, list) else []:
+        if not isinstance(p, dict) or not p.get("state"):
+            continue
+        key = str(p.get("sessionKey") or p.get("clientIdentifier") or p.get("ratingKey") or "")
+        prev = states.get(key, ("", 0))[0]
+        states[key] = (p["state"], now)
+        if p["state"] == "stopped" and prev != "stopped":
+            stops += 1
+    if len(states) > 500:
+        for k in [k for k, (_, t) in states.items() if now - t > PLAY_FORGET]:
+            del states[k]
+    return stops
+
+
 def read_events(lines):
     """Server-sent event lines (bytes or str) -> (event name, parsed data) for each complete event."""
     event, data = "", []
@@ -80,6 +111,11 @@ class LibraryEvents:
         self.changes_total = 0
         self.passes_total = 0
         self.kinds_seen = set()                                # event names logged once, to show the feed works
+        self.play_states = {}                                  # playback session -> (last state, when)
+        self.play_pending, self.play_first, self.play_last = 0, 0.0, 0.0   # stops since the last playback pass
+        self.play_pass_end = 0.0
+        self.stops_total = 0
+        self.play_passes_total = 0
 
     # ---------- feed ----------
     def start(self, stop):
@@ -95,7 +131,7 @@ class LibraryEvents:
                 continue
             try:
                 req = urllib.request.Request(
-                    S.get("plex_url") + "/:/eventsource/notifications?filters=timeline,activity",
+                    S.get("plex_url") + "/:/eventsource/notifications?filters=timeline,activity,playing",
                     headers={"X-Plex-Token": otoken, "Accept": "text/event-stream",
                              "X-Plex-Client-Identifier": self.w.store.client_id, "X-Plex-Product": "Hub Warmer",
                              "X-Plex-Version": __version__})
@@ -107,11 +143,15 @@ class LibraryEvents:
                         if stop.is_set() or not S.get("warm_on_library_change"):
                             break
                         changes = library_changes(event, data)
-                        kind = (event or "-") + (" (library change)" if changes else "")
+                        stops = playback_stops(event, data, self.play_states)
+                        kind = (event or "-") + (" (library change)" if changes else " (playback stopped)" if stops
+                                                 else "")
                         if kind not in self.kinds_seen and len(self.kinds_seen) < 20:
                             self.kinds_seen.add(kind)
                             log(f"library events: first '{kind}' event: {json.dumps(data)[:300]}")
                         self.note(changes)
+                        if S.get("warm_on_playback_stop"):
+                            self.note_stops(stops)
             except Exception as e:
                 if not failed_before:
                     log(f"library events: feed lost ({e!r}); retrying, scheduled passes continue meanwhile")
@@ -134,6 +174,17 @@ class LibraryEvents:
             if len(self.sample) < 3:
                 self.sample += changes[:3 - len(self.sample)]
 
+    def note_stops(self, n):
+        if not n:
+            return
+        now = time.time()
+        with self.lock:
+            if not self.play_pending:
+                self.play_first = now
+            self.play_pending += n
+            self.play_last = now
+            self.stops_total += n
+
     # ---------- when to warm ----------
     def due(self, last_pass_end):
         """A pass is due once no change arrived for the settle time (a scan adds many items in a row), or at the
@@ -144,6 +195,30 @@ class LibraryEvents:
         if now - last_pass_end < settle:
             return False
         return now - self.last >= settle or now - self.first >= 5 * settle
+
+    def play_due(self, last_pass_end):
+        """A collection pass is due once no further playback has stopped for the settle time (people often stop one
+        thing and start the next), at most three settle periods after the first stop. Not sooner than the settle
+        time after any pass, nor sooner than the minimum gap after the previous playback pass."""
+        if not self.play_pending:
+            return False
+        S, now = self.w.S, time.time()
+        settle = S.get("playback_settle_seconds")
+        if now - last_pass_end < settle or now - self.play_pass_end < S.get("playback_min_gap_minutes") * 60:
+            return False
+        return now - self.play_last >= settle or now - self.play_first >= 3 * settle
+
+    def take_play(self):
+        """-> log label for the collection pass that starts now; clears the pending stops"""
+        with self.lock:
+            n, self.play_pending = self.play_pending, 0
+            self.play_passes_total += 1
+            self.play_pass_end = time.time()
+        return f"playback stopped: {n} session{'s' if n != 1 else ''}"
+
+    def done_play(self):
+        """the collection pass has ended: the minimum gap counts from here"""
+        self.play_pass_end = time.time()
 
     def take(self):
         """-> log label for the pass that starts now; clears the pending changes"""
@@ -157,4 +232,6 @@ class LibraryEvents:
     def status(self):
         return {"enabled": bool(self.w.S.get("warm_on_library_change")), "connected": self.connected,
                 "last_change": round(self.last_change) or None,
-                "pending": self.pending, "changes": self.changes_total, "passes": self.passes_total}
+                "pending": self.pending, "changes": self.changes_total, "passes": self.passes_total,
+                "playback": {"enabled": bool(self.w.S.get("warm_on_playback_stop")), "pending": self.play_pending,
+                             "stops": self.stops_total, "passes": self.play_passes_total}}

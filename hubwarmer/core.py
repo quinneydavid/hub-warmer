@@ -26,11 +26,17 @@ POSTER_WORKERS = 3                       # posters requested at the same time
 
 
 HOME_PREFIXES = ("/hubs/promoted", "/hubs/continueWatching")
+COLLECTION_PREFIXES = ("/hubs/promoted", "/hubs/sections/")   # the requests whose rows include collections
 
 
 def is_home_entry(entry):
     """a learned request (json [url, lang, features]) that belongs to the Home screen, not a library page"""
     return json.loads(entry)[0].split("?", 1)[0].startswith(HOME_PREFIXES)
+
+
+def has_collection_rows(entry):
+    """a learned request whose screen can show collection rows (Home and library pages, not Continue Watching)"""
+    return json.loads(entry)[0].split("?", 1)[0].startswith(COLLECTION_PREFIXES)
 
 
 def entry_sections(entry):
@@ -598,9 +604,11 @@ class Warmer:
             return key in self.play_devs.get(acct, ())
         return self.store.entry_ip(acct, e) in self.play_ips.get(acct, ())
 
-    def plan(self, only_user=None):
+    def plan(self, only_user=None, collections=False):
         """-> ({acct: [entries, most recently used first]} to warm now, {acct: reason}, {acct: priority}).
-        Priority 0 = playback just ended, 1 = active recently, 2 = usual hours / always, 3 = idle refresh."""
+        Priority 0 = playback just ended, 1 = active recently, 2 = usual hours / always, 3 = idle refresh.
+        collections: only the requests that show collection rows, only for accounts likely to open Plex now
+        (playback stopped somewhere, which drops every account's collection rows)."""
         st, S = self.store, self.S
         off_a, off_d = S.disabled("accounts"), S.disabled("devices")
         names = st.stats.get("account_names", {})
@@ -652,6 +660,8 @@ class Warmer:
                 self.partial.discard(acct)
             if acct in self.partial:
                 es = [e for e in es if is_home_entry(e)]
+            if collections:
+                es = [e for e in es if has_collection_rows(e)] if prio.get(acct, 3) < 3 else []
             if prio.get(acct) == 0:                  # the device they were just watching on is back on Home first
                 es.sort(key=lambda e: not self.on_playing_device(acct, e))
             if es:
@@ -662,12 +672,16 @@ class Warmer:
             elif acct in self.partial:
                 why[acct] = "out of hours (waiting)"
                 prio.pop(acct, None)
+            elif collections:
+                prio.pop(acct, None)
             elif ent:
                 why[acct] = "all devices off"
+        if collections:
+            self.partial.update(todo)            # a part of the account's screens: not a full warm of the account
         return todo, why, prio
 
     # ---------- one pass ----------
-    def run_once(self, force=False, only_user=None, dry_run=False, label=""):
+    def run_once(self, force=False, only_user=None, dry_run=False, label="", collections=False):
         otoken = self.owner_token()
         if not otoken or not self.S.get("plex_url"):     # nothing to do until the page has both (see web.py)
             self.state = "waiting-for-setup"
@@ -686,11 +700,15 @@ class Warmer:
             probe_s, _ = self.pms(probe, otoken)
             st.note_probe(probe_s)
         due = time.time() - st.learned.get("last_warm", 0) > S.get("top_up_minutes") * 60
-        todo, why, prio = self.plan(only_user)
-        self.last_plan = {"ts": time.time(), "why": why,
-                          "requests": sum(len(v) for v in todo.values()), "accounts": len(todo)}
-        full = not only_user
-        if not (force or due or probe_s > S.get("probe_slow_seconds")):
+        todo, why, prio = self.plan(only_user, collections=collections)
+        if not collections:
+            self.last_plan = {"ts": time.time(), "why": why,
+                              "requests": sum(len(v) for v in todo.values()), "accounts": len(todo)}
+        full = not only_user and not collections
+        if collections and not todo:
+            self.state = "idle"
+            return
+        if not collections and not (force or due or probe_s > S.get("probe_slow_seconds")):
             todo = {a: es for a, es in todo.items() if prio.get(a) == 0}   # only who just stopped watching
             full = False
             if not todo:
@@ -700,10 +718,11 @@ class Warmer:
             log(f"skipping: {n_tc} transcodes > {S.get('pause_above_transcodes')}")
             self.state = "idle"
             return
-        self._warm(todo, prio, otoken, dry_run=dry_run, full=full, no_budget=bool(only_user), label=label)
+        self._warm(todo, prio, otoken, dry_run=dry_run, full=full, no_budget=bool(only_user), label=label,
+                   kind="playback" if collections else "library" if label else "")
         self.state = "idle"
 
-    def _warm(self, todo, prio, otoken, dry_run=False, full=True, no_budget=False, label=""):
+    def _warm(self, todo, prio, otoken, dry_run=False, full=True, no_budget=False, label="", kind=""):
         """Replay todo. Most urgent accounts first (then whoever waited longest); stops starting new accounts
         once the time budget is used - the rest go first on the next pass."""
         st, S = self.store, self.S
@@ -742,7 +761,8 @@ class Warmer:
                 if was_cold:
                     log(f"{name} {s:5.2f}s [{lang or '-'}|{feat[:30] or '-'}] {url[:80]}")
             done.append(acct)
-            self.after_play.pop(acct, None)
+            if kind != "playback":           # a collection pass leaves out Continue Watching: not their full warm
+                self.after_play.pop(acct, None)
         took = time.time() - t0
         log(f"warmed {n} requests for {len(done)} accounts ({cold} were cold, {errors} errors) in {took:.1f}s"
             + (f"; time budget reached, {left} requests wait for the next pass" if left else "")
@@ -750,7 +770,7 @@ class Warmer:
         self.last_pass_end = time.time()
         if not dry_run:
             st.note_run(n, cold, cold_s, errors, took, per_acct, [a for a in done if a not in self.partial],
-                        full=full, n_accounts=len(done))
+                        full=full, n_accounts=len(done), kind=kind or ("" if full else "after playback"))
             if S.get("warm_posters"):
                 self.warm_posters(toks)
 
@@ -838,24 +858,32 @@ class Warmer:
         log(f"hub-warmer {__version__}: Plex {self.S.get('plex_url') or '(not set: open the web page)'}, "
             f"logs {self.S.get('plex_logs')}, data {C.DATA_DIR}")
         self.events.start(stop)
-        label = ""
+        label, collections = "", False
         while not stop.is_set():
             force, self.force_next = self.force_next or bool(label), False
             try:
-                self.run_once(force=force, label=label)
+                self.run_once(force=force, label=label, collections=collections)
                 self.last_error = ""
             except Exception as e:
                 self.state, self.last_error = "error", repr(e)
                 log(f"run failed: {e!r}")
-            label = ""
-            wait = self.S.get("interval_seconds")
+            if collections:
+                self.events.done_play()
+                wait = max(1.0, self.next_check - time.time())   # a collection pass leaves the schedule as it was
+            else:
+                wait = self.S.get("interval_seconds")
+            label, collections = "", False
             self.next_check = time.time() + wait
             while not stop.is_set():
                 if self.events.due(self.last_pass_end):        # the library changed: warm now, not at the next check
                     label = self.events.take()
                     break
+                if self.events.play_due(self.last_pass_end):   # playback stopped: collection rows only
+                    label, collections = self.events.take_play(), True
+                    break
                 left = self.next_check - time.time()
-                step = min(left, self.S.get("session_poll_seconds"), 5 if self.events.pending else 3600)
+                step = min(left, self.S.get("session_poll_seconds"),
+                           5 if self.events.pending or self.events.play_pending else 3600)
                 if left <= 0 or self.wake.wait(step):
                     break
                 try:

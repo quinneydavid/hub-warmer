@@ -354,7 +354,7 @@ class Store:
             self.stats["rows_ts"] = time.time()
 
     # ---------- warm runs ----------
-    def note_run(self, n, cold, cold_s, errors, took, per_acct, warmed_accts, full=True, n_accounts=None):
+    def note_run(self, n, cold, cold_s, errors, took, per_acct, warmed_accts, full=True, n_accounts=None, kind=""):
         """warmed_accts: accounts whose every request was replayed (their idle-refresh clock restarts)"""
         now = time.time()
         with self.lock:
@@ -366,7 +366,8 @@ class Store:
                 tot[k] = tot.get(k, 0) + v
             s.setdefault("runs", []).append({"ts": now, "n": n, "cold": cold, "cold_s": round(cold_s, 2),
                                              "errors": errors, "took": round(took, 1),
-                                             "accounts": len(warmed_accts) if n_accounts is None else n_accounts})
+                                             "accounts": len(warmed_accts) if n_accounts is None else n_accounts,
+                                             **({"kind": kind} if kind else {})})
             last = s.setdefault("last", {})
             for acct, ent in per_acct.items():
                 for e, (sec, was_cold) in ent.items():

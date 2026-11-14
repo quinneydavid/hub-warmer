@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0 (2026-11-14)
+- Stopped playback starts a short pass. When anyone stops or finishes playing something, Plex discards the collection rows of every account, not only the account that was watching. The warmer now also follows playback on Plex's notification feed and, once no further session has stopped for 60 seconds (at most 180 seconds), rebuilds the Home and library page requests of the accounts that are likely to open Plex now: active in the last two hours or in their usual hours. At least 3 minutes between two such passes; the regular schedule is unchanged. Settings `WARM_ON_PLAYBACK_STOP`, `PLAYBACK_SETTLE_SECONDS`, `PLAYBACK_MIN_GAP_MINUTES`; metrics `playback_stops_total`, `playback_passes_total`.
+- The Recent passes table shows what started each pass: the schedule, a library change, stopped playback, or the end of an account's own playback.
+
 ## 0.7.0 (2026-11-14)
 - Library changes start a pass. The warmer follows Plex's notification feed and starts a pass as soon as items have been added, changed or removed, or a collection was edited, once the change has settled (no further change for 30 seconds, at most 150 seconds). Before, a change was noticed at the next probe or scheduled pass, up to five minutes later. Settings `WARM_ON_LIBRARY_CHANGE` and `LIBRARY_SETTLE_SECONDS`; the Overview page shows whether the feed is connected; metrics `library_events_connected`, `library_changes_total`, `library_passes_total`.
 - The cache hit rate is also shown without loads made during the account's own playback, which no warming can keep cached. Every rebuilt load is now counted by cause, not only slow ones: metric `user_row_misses_total`.

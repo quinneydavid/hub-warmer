@@ -65,6 +65,18 @@ DEFS = {
                                "After a library change, wait until no further change has arrived for this long (a "
                                "scan adds many items in a row), at most five times as long. Also the minimum gap "
                                "after the previous pass."),
+    "warm_on_playback_stop": (int, int(C.env("WARM_ON_PLAYBACK_STOP", "1")), 0, 1, "Warm collections when playback stops",
+                              "Plex drops every account's collection rows when someone stops or finishes playing "
+                              "something. When on, a short pass rebuilds the Home and library pages of the accounts "
+                              "likely to open Plex now (recently active or in their usual hours)."),
+    "playback_settle_seconds": (int, int(C.env("PLAYBACK_SETTLE_SECONDS", "60")), 10, 600,
+                                "Playback stop settle time (seconds)",
+                                "After playback stops, wait until no further session has stopped for this long, at "
+                                "most three times as long. Also the minimum gap after the previous pass."),
+    "playback_min_gap_minutes": (float, float(C.env("PLAYBACK_MIN_GAP_MINUTES", "3")), 1, 60,
+                                 "Playback pass minimum gap (minutes)",
+                                 "At least this long between two passes started by playback, so a busy evening "
+                                 "does not keep Plex busy."),
     "warm_posters": (int, int(C.env("WARM_POSTERS", "1")), 0, 1, "Prepare posters",
                      "Plex resizes each poster for the device that asks and keeps the result. When on, the posters "
                      "of every warmed screen are requested in advance, in the sizes each account's apps use."),

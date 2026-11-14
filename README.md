@@ -2,7 +2,7 @@
 
 On a Plex server with many collection rows, the Home screen and library pages can take several seconds to
 open. Plex builds each row on request and keeps the result in a cache, and that cache is cleared whenever the
-library changes, whenever an account plays something, and after a day without use. The next person to open the
+library changes, whenever someone plays something, and after a day without use. The next person to open the
 app waits while every row is rebuilt.
 
 Hub Warmer keeps those rows in Plex's cache, for every account and every device that uses the server, so the
@@ -44,7 +44,8 @@ Plex caches the built rows, but the cache is narrow and short-lived:
 - An entry belongs to one account and one exact request, including the device's language and feature flags.
   A television, a phone and a browser on the same account each have their own entries.
 - Entries are discarded when the library changes (new items, metadata refreshes, collection edits), when the
-  account's own playback state changes, and after 24 hours without use.
+  account's own playback state changes, and after 24 hours without use. Collection rows are discarded for
+  every account whenever anyone stops or finishes playing something.
 
 After entries are discarded, the next person to open that page waits while every row is rebuilt.
 
@@ -71,6 +72,9 @@ the library, and needs no configuration per user or device. It does three things
 - **Reacts to library changes.** It follows Plex's notification feed. When items are added, changed or removed,
   or a collection is edited, a pass starts as soon as the change has settled, so new episodes and films do
   not leave Home uncached until the next check.
+- **Reacts to playback stopping.** When someone stops or finishes playing something, Plex discards the
+  collection rows of every account. About a minute later, a short pass rebuilds the Home and library pages of
+  the accounts likely to open Plex now.
 - **Detects a cleared cache.** A probe request every two minutes shows whether Plex has cleared its cache for
   any other reason, and a warming pass starts when it has.
 - **Rebuilds the rows as each account.** It repeats every learned request as that account, with that device's
@@ -110,13 +114,13 @@ for it.
 ## How it works
 
 1. **Learn.** The warmer reads Plex's debug log to find which row requests each account's clients make. No per-user or per-device configuration is needed; a client is picked up the first time it is used.
-2. **Detect.** Plex's notification feed reports library changes as they happen. A probe request every two minutes shows whether Plex has cleared its cache for another reason. Active playback sessions are checked every 15 seconds.
+2. **Detect.** Plex's notification feed reports library changes and stopped playback as they happen. A probe request every two minutes shows whether Plex has cleared its cache for another reason. Active playback sessions are checked every 15 seconds.
 3. **Replay.** When the library has changed, when the cache has been cleared, and on a regular schedule, the warmer repeats each learned request as that account, with that client's headers, so Plex rebuilds the rows before anyone asks for them.
 
 ```mermaid
 flowchart LR
   A[Plex log<br/>HubCache lines] -->|learn requests<br/>per account and client| W(Hub Warmer)
-  N[Plex notification<br/>feed] -->|library changed| W
+  N[Plex notification<br/>feed] -->|library changed,<br/>playback stopped| W
   P[Probe and<br/>session checks] -->|cache cleared?<br/>playback ended?| W
   W -->|replay as each account,<br/>with its client's headers| X[Plex hub cache]
   U[Clients] -->|rows served from cache| X
@@ -232,6 +236,7 @@ In both modes:
 
 - Playback is tracked per device. The device that is playing is skipped until playback ends or is paused, and is then warmed first. The account's other devices are still kept warm, because people browse on a second device, or share an account, while something plays.
 - A library change reported by Plex starts a pass once no further change has arrived for 30 seconds (at most 150 seconds after the first change), and not sooner than 30 seconds after the previous pass.
+- When Plex reports that playback stopped, a pass over the Home and library page requests (not Continue Watching) of accounts that were active in the last two hours or are in their usual hours starts once no further session has stopped for 60 seconds (at most 180 seconds after the first stop). There are at least 3 minutes between two such passes, and they do not move the regular schedule.
 - A pass has a time budget of 90 seconds. Accounts are ordered by urgency (playback ended, recently active, usual hours, idle); accounts that do not fit go first on the next pass.
 - Passes can be paused while more than a set number of transcodes are running.
 
@@ -277,6 +282,9 @@ Every setting on the page also has an environment variable that sets its default
 | `POSTER_BUDGET_SECONDS` | `45` | Time spent on posters after each pass |
 | `WARM_ON_LIBRARY_CHANGE` | `1` | Start a pass when Plex reports a library change. `0` leaves it to the probe and the schedule |
 | `LIBRARY_SETTLE_SECONDS` | `30` | After a library change, wait until no further change has arrived for this long, at most five times as long. Also the minimum gap after the previous pass |
+| `WARM_ON_PLAYBACK_STOP` | `1` | Rebuild collection rows when Plex reports that playback stopped. `0` leaves it to the schedule |
+| `PLAYBACK_SETTLE_SECONDS` | `60` | After playback stops, wait until no further session has stopped for this long, at most three times as long. Also the minimum gap after the previous pass |
+| `PLAYBACK_MIN_GAP_MINUTES` | `3` | Minimum time between two passes started by playback |
 | `SLOW_LOAD_SECONDS` | `1.0` | Row loads longer than this are reported as slow loads |
 | `PROBE_SLOW_SECONDS` | `1.0` | Smart mode: a probe request slower than this means the rows were dropped, and a pass starts |
 | `PAUSE_ABOVE_TRANSCODES` | `0` | Skip passes while more than this many transcodes are running. `0` disables the limit |

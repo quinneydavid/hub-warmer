@@ -68,6 +68,10 @@ def render(store, warmer):
         m("library_events_connected", "gauge", "1 while Plex's notification feed is connected.", 1 if ev.connected else 0)
         m("library_changes_total", "counter", "Library changes received from Plex since the start.", ev.changes_total)
         m("library_passes_total", "counter", "Passes started by a library change since the start.", ev.passes_total)
+        m("playback_stops_total", "counter", "Playback sessions reported stopped by Plex since the start.",
+          ev.stops_total)
+        m("playback_passes_total", "counter", "Collection passes started by stopped playback since the start.",
+          ev.play_passes_total)
 
         po = s.get("posters", {})
         m("poster_requests_total", "counter", "Posters requested in advance.", po.get("requests", 0))

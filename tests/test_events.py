@@ -23,6 +23,11 @@ def read_events(*a):
     return f(*a)
 
 
+def playback_stops(*a, **kw):
+    from hubwarmer.events import playback_stops as f
+    return f(*a, **kw)
+
+
 def LibraryEvents(w):
     from hubwarmer.events import LibraryEvents as c
     return c(w)
@@ -88,7 +93,8 @@ class EventStream(unittest.TestCase):
 
 class FakeSettings:
     def __init__(self, **kw):
-        self.v = dict({"warm_on_library_change": 1, "library_settle_seconds": 30, "plex_url": ""}, **kw)
+        self.v = dict({"warm_on_library_change": 1, "library_settle_seconds": 30, "plex_url": "",
+                       "warm_on_playback_stop": 1, "playback_settle_seconds": 60, "playback_min_gap_minutes": 3}, **kw)
 
     def get(self, k):
         return self.v[k]
@@ -169,8 +175,82 @@ class Feed(unittest.TestCase):
         stop.set()
         srv.shutdown()
         self.assertEqual(ev.pending, 1)
-        self.assertTrue(seen["path"].startswith("/:/eventsource/notifications?filters=timeline,activity"))
+        self.assertTrue(seen["path"].startswith("/:/eventsource/notifications?filters=timeline,activity,playing"))
         self.assertEqual(seen["token"], "tok")
+
+
+def play(state, key="7"):
+    return {"PlaySessionStateNotification": [{"sessionKey": key, "ratingKey": "987695", "state": state,
+                                              "viewOffset": 1000}]}
+
+
+class PlaybackStops(unittest.TestCase):
+    def test_counts_each_stop_once(self):
+        st = {}
+        self.assertEqual(playback_stops("playing", play("playing"), st), 0)
+        self.assertEqual(playback_stops("playing", play("paused"), st), 0)
+        self.assertEqual(playback_stops("playing", play("stopped"), st), 1)
+        self.assertEqual(playback_stops("playing", play("stopped"), st), 0)     # repeated report
+        self.assertEqual(playback_stops("playing", play("playing"), st), 0)
+        self.assertEqual(playback_stops("playing", play("stopped"), st), 1)     # stopped again after resuming
+
+    def test_several_sessions_and_wrapped_form(self):
+        st = {}
+        data = {"NotificationContainer": {"type": "playing", "PlaySessionStateNotification": [
+            {"sessionKey": "1", "state": "stopped"}, {"sessionKey": "2", "state": "stopped"},
+            {"sessionKey": "3", "state": "playing"}]}}
+        self.assertEqual(playback_stops("", data, st), 2)
+        self.assertEqual(playback_stops("playing", {"PlaySessionStateNotification": {"sessionKey": "4",
+                                                                                   "state": "stopped"}}, st), 1)
+
+    def test_garbage_and_other_events(self):
+        for d in (None, [], "x", {"PlaySessionStateNotification": "x"}, {"PlaySessionStateNotification": [1]},
+                  {"TimelineEntry": [entry()]}):
+            self.assertEqual(playback_stops("playing", d, {}), 0)
+
+    def test_old_sessions_are_forgotten(self):
+        st = {str(i): ("playing", 0) for i in range(600)}
+        playback_stops("playing", play("stopped", "new"), st, now=10 * 3600)
+        self.assertEqual(list(st), ["new"])
+
+
+class PlaybackDue(unittest.TestCase):
+    def test_settles_then_fires(self):
+        ev = LibraryEvents(FakeWarmer())
+        self.assertFalse(ev.play_due(0))
+        ev.note_stops(1)
+        self.assertFalse(ev.play_due(0))                 # someone may start the next episode
+        ev.play_last -= 61
+        self.assertTrue(ev.play_due(0))
+        self.assertEqual(ev.take_play(), "playback stopped: 1 session")
+        self.assertFalse(ev.play_due(0))
+        self.assertEqual(ev.play_passes_total, 1)
+
+    def test_minimum_gap_between_playback_passes(self):
+        ev = LibraryEvents(FakeWarmer())
+        ev.note_stops(2)
+        ev.play_last -= 61
+        ev.take_play()
+        ev.done_play()
+        ev.note_stops(1)
+        ev.play_last -= 61
+        self.assertFalse(ev.play_due(0))                 # the previous playback pass ended just now
+        ev.play_pass_end -= 181
+        self.assertTrue(ev.play_due(0))
+        self.assertEqual(ev.take_play(), "playback stopped: 1 session")
+
+    def test_steady_stops_fire_after_three_settle_periods(self):
+        ev = LibraryEvents(FakeWarmer())
+        ev.note_stops(1)
+        ev.play_first -= 181
+        self.assertTrue(ev.play_due(0))
+
+    def test_gap_after_any_pass(self):
+        ev = LibraryEvents(FakeWarmer())
+        ev.note_stops(1)
+        ev.play_last -= 120
+        self.assertFalse(ev.play_due(time.time() - 30))
+        self.assertTrue(ev.play_due(time.time() - 90))
 
 
 class MissCauses(unittest.TestCase):

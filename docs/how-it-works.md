@@ -35,6 +35,7 @@ Plex discards entries in these cases:
 |---|---|
 | Library change: new or removed items, metadata refresh, collection edit | All accounts |
 | Playback state update for an account, about every 10 seconds during playback | That account's collection and progress rows |
+| Any account stops or finishes playing something | Collection rows of all accounts (the log gives `because of event plex.event.play.session.state.update.`) |
 | No use for 24 hours | The unused entry |
 
 After entries are discarded, the next request rebuilds every hub on the page before it returns.
@@ -68,14 +69,15 @@ The warmer's replays appear in the Plex log like any other request and must not 
 
 ### 3. Detect
 
-- **Library changes.** The warmer keeps a connection open to Plex's notification feed (`/:/eventsource/notifications?filters=timeline,activity`, as the owner). A timeline entry for the library in state 5 (processed) or 9 (removed), or a `library.*` activity that has ended, counts as a library change: new and removed items, metadata refreshes and collection edits. Changes usually arrive in bursts while a scan runs, so a pass starts once none has arrived for the settle time (default 30 seconds), at the latest five settle periods after the first, and never sooner than the settle time after the previous pass. If the feed is lost the warmer reconnects with increasing delays and relies on the probe and the schedule meanwhile.
+- **Library changes.** The warmer keeps a connection open to Plex's notification feed (`/:/eventsource/notifications?filters=timeline,activity,playing`, as the owner). A timeline entry for the library in state 5 (processed) or 9 (removed), or a `library.*` activity that has ended, counts as a library change: new and removed items, metadata refreshes and collection edits. Changes usually arrive in bursts while a scan runs, so a pass starts once none has arrived for the settle time (default 30 seconds), at the latest five settle periods after the first, and never sooner than the settle time after the previous pass. If the feed is lost the warmer reconnects with increasing delays and relies on the probe and the schedule meanwhile.
+- **Stopped playback.** The same feed carries a `PlaySessionStateNotification` for every playback session about every 10 seconds. A session that changes to `stopped` counts once; progress updates and pauses are ignored. Stops are collected until none has arrived for the settle time (default 60 seconds, because people often stop one episode and start the next), at the latest three settle periods after the first. Then a collection pass runs: only requests that can show collection rows (`/hubs/promoted`, `/hubs/sections/…`), only for accounts active in the last two hours or in their usual hours. There are at least 3 minutes between two collection passes, and they leave the regular schedule as it was.
 - **Probe.** Every 2 minutes one hub request is timed. A slow response means the cache has been cleared and starts a pass. The probe is skipped while the owner is playing, because the owner's rows are discarded continuously during playback.
 - **Devices.** The request log records only an address, so the warmer also reads Plex's per-second traffic statistics per account and device (`/statistics/bandwidth?timespan=6`, kept by Plex for a few minutes) every 30 seconds. A page request is attributed to the device on that account that was transferring data at that second. When two devices were both busy, the request keeps its address only.
 - **Sessions.** Every 15 seconds `/status/sessions` is read. An account with an active session is skipped. When its session ends, the account is warmed immediately, starting with the requests from the device that was playing. Session data also provides device names.
 
 ### 4. Replay
 
-A pass runs when the library has changed, when the probe is slow, when a session has ended, and at least every 5 minutes. In smart mode it replays the Home screen requests (`/hubs/promoted`, `/hubs/continueWatching`) of every account, and all learned requests of the accounts that are due:
+A pass runs when the library has changed, when the probe is slow, when a session has ended, and at least every 5 minutes. A shorter collection pass runs after playback has stopped (see above). In smart mode it replays the Home screen requests (`/hubs/promoted`, `/hubs/continueWatching`) of every account, and all learned requests of the accounts that are due:
 
 - as that account; server access tokens for shared accounts come from plex.tv (`/api/servers/<id>/shared_servers`) and are held in memory only,
 - with that client's `X-Plex-Language` and `X-Plex-Features` headers, so Plex fills the entry the client will read,

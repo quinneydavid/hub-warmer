@@ -189,16 +189,19 @@ function overview(d){
   h += postersCard(d);
   if (owner) h += slowLoads(d) + rowCosts(d) + (d.work && d.work.length ? `<div class="card"><h2>Warmer activity</h2><p class="sub">Requests replayed per hour over the last 48 hours.</p>${workChart(d.work)}${legend(["Already cached", "Rebuilt"], ["var(--c0)", "var(--c2)"])}</div>` : "");
   if (owner && d.runs && d.runs.length) h += `<div class="card"><h2>Recent passes</h2>
-    <table><tr><th>Time</th><th class="n">Accounts</th><th class="n">Requests</th><th class="n">Rebuilt</th><th class="n">Rebuild time</th><th class="n">Duration</th></tr>
-    ${d.runs.slice(-15).reverse().map(r => `<tr><td>${ago(r.ts)}</td><td class="n">${r.accounts ?? "–"}</td><td class="n">${r.n}</td><td class="n">${r.cold}</td><td class="n">${dur(r.cold_s)}</td><td class="n">${dur(r.took)}</td></tr>`).join("")}</table></div>`;
+    <table><tr><th>Time</th><th>Started by</th><th class="n">Accounts</th><th class="n">Requests</th><th class="n">Rebuilt</th><th class="n">Rebuild time</th><th class="n">Duration</th></tr>
+    ${d.runs.slice(-15).reverse().map(r => `<tr><td>${ago(r.ts)}</td><td>${RUNKIND[r.kind] || "Schedule"}</td><td class="n">${r.accounts ?? "–"}</td><td class="n">${r.n}</td><td class="n">${r.cold}</td><td class="n">${dur(r.cold_s)}</td><td class="n">${dur(r.took)}</td></tr>`).join("")}</table></div>`;
   return h;
 }
 
 const causeText = {"own playback": "The account's own playback invalidated its rows shortly before the request.", "library change": "Items were added, changed or removed shortly before the request.", "row changed": "A collection was edited, or a smart collection was due for re-evaluation.", "new app or screen": "This client or screen had not been seen before. It is tracked from now on.", "not rewarmed": "The rows were dropped more than 15 minutes before the request and no pass had rebuilt them yet: the account was outside its usual hours, or a pass ran out of time.", "other": "The rows were not in the cache, and the Plex log shows no event that dropped them.", "not cache related": "All rows came from the cache. The request waited on something else, such as an identical request already building the same rows, or server load."};
+const RUNKIND = {"library": "Library change", "playback": "Playback stopped", "after playback": "Own playback ended"};
 function libEvents(e){
   if (!e || !e.enabled) return "";
   if (!e.connected) return "<br>Library changes: not connected, scheduled passes only";
-  return `<br>Library changes: watched${e.last_change ? ` · last ${ago(e.last_change)}` : ""}${e.pending ? ` · ${e.pending} waiting` : ""}`;
+  const p = e.playback || {};
+  return `<br>Library changes: watched${e.last_change ? ` · last ${ago(e.last_change)}` : ""}${e.pending ? ` · ${e.pending} waiting` : ""}`
+    + (p.enabled ? `<br>Playback stops: ${p.passes || 0} collection passes${p.pending ? ` · ${p.pending} waiting` : ""}` : "");
 }
 function screensCard(d){
   if (!d.screens || !d.screens.length) return "";
